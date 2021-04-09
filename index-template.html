@@ -1,0 +1,16 @@
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="style.css" />
+  </head>
+  <body>
+    <div class="header">
+      <img class="logo" src="{{logo}}" />
+      <div class="site-name">{{name}}</div>
+    </div>
+    <div class="nb-pages">
+      {{#each pages}}
+      <img class="nb-page-svg" src="{{this}}" />
+      {{/each}}
+    </div>
+  </body>
+</html>

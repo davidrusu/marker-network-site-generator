@@ -1,0 +1,11 @@
+html {
+  margin: 0px;
+}
+
+.header {
+  display: flex;
+}
+
+.logo {
+  width: 50px;
+}

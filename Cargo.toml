@@ -1,0 +1,18 @@
+[package]
+name = "rm-site-gen"
+version = "0.1.0"
+authors = ["David Rusu <davidrusu.me@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+handlebars = "3.5.4"
+tokio = { version = "1", features = ["full"] }
+lines-are-rusty = { path = "../lines-are-rusty" }
+remarkable-cloud-api = { path = "../remarkable-rs/remarkable-cloud-api" }
+structopt = "0.3.21"
+serde_json = "1.0"
+serde = "1.0"
+anyhow = "1.0"
+zip = "0.5"
