@@ -1,0 +1,10 @@
+{
+  "site_root": "Marker",
+  "title": "David's Notes",
+  "css": "style.css",
+  "templates": {
+    "index": "index-template.html",
+    "document": "document-template.html",
+    "folder": "folder-template.html"
+  }
+}

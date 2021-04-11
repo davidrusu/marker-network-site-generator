@@ -519,6 +519,7 @@ checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
 [[package]]
 name = "lines-are-rusty"
 version = "0.2.0"
+source = "git+https://github.com/davidrusu/lines-are-rusty.git?branch=changes-for-marker-network#099b6d02bff008103623b708f08f2d0afebb308d"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -551,6 +552,22 @@ name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
+name = "marker-network-site-generator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "handlebars",
+ "lines-are-rusty",
+ "remarkable-cloud-api",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tokio",
+ "url",
+ "zip",
+]
 
 [[package]]
 name = "matches"
@@ -845,6 +862,7 @@ dependencies = [
 [[package]]
 name = "remarkable-cloud-api"
 version = "0.1.0"
+source = "git+https://github.com/davidrusu/remarkable-rs?branch=drusu/updates#5c4867e37d039f38071a82df6cdac1951bb9ba6a"
 dependencies = [
  "bytes",
  "chrono",
@@ -905,22 +923,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "rm-site-gen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "handlebars",
- "lines-are-rusty",
- "remarkable-cloud-api",
- "serde",
- "serde_json",
- "structopt",
- "tokio",
- "url",
- "zip",
 ]
 
 [[package]]

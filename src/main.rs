@@ -11,7 +11,7 @@ use zip;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SiteConfig {
-    site_root: Uuid,
+    site_root: String,
     title: String,
     css: std::path::PathBuf,
     templates: Templates,
@@ -178,7 +178,21 @@ async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path
     std::fs::create_dir_all(&archives_dir)?;
 
     let documents = client.all_documents(false).await?;
-    let site_root_docs = documents.children(Parent::Node(config.site_root));
+    let root_nodes = documents.children(Parent::Root);
+    let site_roots: Vec<_> = root_nodes
+        .iter()
+        .filter(|d| d.visible_name == config.site_root)
+        .collect();
+
+    if site_roots.len() != 1 {
+        println!(
+            "Make sure to have one folder named '{}' on your remarkable",
+            config.site_root
+        )
+    }
+
+    let site_root_id = site_roots[0].id;
+    let site_root_docs = documents.children(Parent::Node(site_root_id));
 
     let manifest = build_manifest(&site_root_docs, &documents)?;
     let manifest_file = std::fs::File::create(&output_path.join("manifest.json"))?;
