@@ -19,24 +19,13 @@
     </div>
     <div class="container">
       <div class="navbar">
-         <div class="nav group">
-           {{#each folders}}
-	   <a class="nav folder-link" href="{{link}}">{{name}}</a>
-	   {{/each}}
-	 </div>
-	 <div class="nav group">
-           {{#each documents}}
-	   <a class="nav document-link" href="{{link}}">
-	      <div class="document-link-name">{{name}}</div>
-	      <img class="nb-page-svg thumbnail" src="{{svg}}" />
-	   </a>
-	   {{/each}}
-	 </div>
+        <div class="nav group">
+          <a class="folder-link" href="{{back_link}}">&lt;&lt;&lt;</a>
+        </div>
       </div>
       <div class="nb-pages">
         {{#each pages}}
         <img class="nb-page-svg" src="{{this}}" />
-	<div class="nb-page-divider"></div>
         {{/each}}
       </div>
     </div>

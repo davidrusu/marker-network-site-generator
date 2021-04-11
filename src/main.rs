@@ -12,7 +12,7 @@ use zip;
 #[derive(Debug, Serialize, Deserialize)]
 struct SiteConfig {
     site_root: Uuid,
-    name: String,
+    title: String,
     css: std::path::PathBuf,
     templates: Templates,
 }
@@ -20,12 +20,16 @@ struct SiteConfig {
 #[derive(Debug, Serialize, Deserialize)]
 struct Templates {
     index: std::path::PathBuf,
+    document: std::path::PathBuf,
+    folder: std::path::PathBuf,
 }
 
 impl Templates {
     fn build_handlebars(&self) -> Result<Handlebars> {
         let mut reg = Handlebars::new();
         reg.register_template_file("index", &self.index)?;
+        reg.register_template_file("document", &self.document)?;
+        reg.register_template_file("folder", &self.folder)?;
         Ok(reg)
     }
 }
@@ -118,13 +122,13 @@ fn build_manifest<'a>(root_docs: &[&'a Document], all_docs: &'a Documents) -> Re
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Posts {
-    docs: BTreeMap<String, Uuid>,
+    documents: BTreeMap<String, Uuid>,
     folders: BTreeMap<String, Posts>,
 }
 
 impl Posts {
     fn doc_ids(&self) -> Vec<Uuid> {
-        self.docs
+        self.documents
             .values()
             .copied()
             .chain(self.folders.values().flat_map(|f| f.doc_ids()))
@@ -150,7 +154,7 @@ fn find_posts<'a>(root_docs: &[&'a Document], all_docs: &'a Documents) -> Result
 
 fn build_posts_hierarchy(folder: Uuid, all_docs: &Documents) -> Posts {
     let items = all_docs.children(Parent::Node(folder));
-    let docs = items
+    let documents = items
         .iter()
         .filter(|d| d.doc_type == "DocumentType")
         .map(|d| (d.visible_name.clone(), d.id))
@@ -165,7 +169,7 @@ fn build_posts_hierarchy(folder: Uuid, all_docs: &Documents) -> Posts {
             )
         })
         .collect();
-    Posts { docs, folders }
+    Posts { documents, folders }
 }
 
 async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path) -> Result<()> {
@@ -177,7 +181,7 @@ async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path
     let site_root_docs = documents.children(Parent::Node(config.site_root));
 
     let manifest = build_manifest(&site_root_docs, &documents)?;
-    let mut manifest_file = std::fs::File::create(&output_path.join("manifest.json"))?;
+    let manifest_file = std::fs::File::create(&output_path.join("manifest.json"))?;
     serde_json::to_writer_pretty(manifest_file, &manifest)?;
 
     for doc_id in manifest.doc_ids() {
@@ -229,13 +233,203 @@ fn render_zip(
     Ok(rendered_svgs)
 }
 
+fn sanitize(folder: &str) -> String {
+    folder
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+fn gen_doc(
+    config: &SiteConfig,
+    handlebars: &Handlebars,
+    manifest: &Manifest,
+    root: &std::path::Path,
+    breadcrumbs: &[(String, std::path::PathBuf)],
+    parent: &std::path::Path,
+    name: &str,
+    id: Uuid,
+    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
+) -> Result<std::path::PathBuf> {
+    let sanitized_name = sanitize(name);
+    let doc_path = parent.join(format!("{}.html", sanitized_name));
+    let doc_html = std::fs::File::create(&doc_path)?;
+
+    handlebars.render_to_write(
+        "document",
+        &json!({
+            "title": config.title,
+            "name": name,
+            "breadcrumbs": breadcrumbs
+                .iter()
+                .map(|(name, link)| json!({"name": name, "link": link}))
+                .collect::<Vec<_>>(),
+            "logo": svgs[&manifest.logo][0],
+            "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
+            "pages": svgs[&id],
+        }),
+        doc_html,
+    )?;
+
+    Ok(std::path::PathBuf::from("/").join(doc_path.strip_prefix(root)?.to_path_buf()))
+}
+
+fn gen_folder(
+    config: &SiteConfig,
+    handlebars: &Handlebars,
+    manifest: &Manifest,
+    root: &std::path::Path,
+    breadcrumbs: &[(String, std::path::PathBuf)],
+    parent: &std::path::Path,
+    folder: &str,
+    posts: &Posts,
+    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
+) -> Result<std::path::PathBuf> {
+    let sanitized_folder = sanitize(folder);
+    let folder_path = parent.join(&sanitized_folder);
+    std::fs::create_dir_all(&folder_path)?;
+
+    let folder_html_path = parent.join(format!("{}.html", sanitized_folder));
+    let folder_link =
+        std::path::PathBuf::from("/").join(folder_html_path.strip_prefix(root)?.to_path_buf());
+
+    let mut docs: Vec<(String, Uuid, std::path::PathBuf)> = Vec::new();
+    let mut sub_folders: Vec<(String, std::path::PathBuf)> = Vec::new();
+
+    let mut breadcrumbs_for_children = breadcrumbs.to_vec();
+    breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
+    for (doc_name, doc_id) in posts.documents.iter() {
+        let doc_path = gen_doc(
+            config,
+            handlebars,
+            manifest,
+            root,
+            &breadcrumbs_for_children,
+            &folder_path,
+            doc_name,
+            *doc_id,
+            svgs,
+        )?;
+        docs.push((doc_name.to_string(), *doc_id, doc_path));
+    }
+
+    for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
+        let sub_folder_path = gen_folder(
+            config,
+            handlebars,
+            manifest,
+            root,
+            &breadcrumbs_for_children,
+            &folder_path,
+            sub_folder_name,
+            sub_folder_posts,
+            svgs,
+        )?;
+        sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
+    }
+
+    let folder_html = std::fs::File::create(&folder_html_path)?;
+    handlebars.render_to_write(
+        "folder",
+        &json!({
+            "title": config.title,
+            "name": folder,
+            "logo": svgs[&manifest.logo][0],
+            "breadcrumbs": breadcrumbs
+                .iter()
+                .map(|(name, link)| json!({"name": name, "link": link}))
+                .collect::<Vec<_>>(),
+            "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
+            "documents": docs.into_iter().map(|(name, id, link)| json!({
+                "name": name,
+                "svg": svgs[&id][0],
+                "link": link,
+            })).collect::<Vec<_>>(),
+            "folders": sub_folders.into_iter().map(|(name, link)| json!({
+                "name": name,
+                "link": link,
+            })).collect::<Vec<_>>(),
+        }),
+        folder_html,
+    )?;
+
+    Ok(folder_link)
+}
+
+fn gen_index(
+    config: &SiteConfig,
+    handlebars: &Handlebars,
+    manifest: &Manifest,
+    root: &std::path::Path,
+    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
+) -> Result<()> {
+    let mut docs: Vec<(String, Uuid, std::path::PathBuf)> = Vec::new();
+    let mut sub_folders: Vec<(String, std::path::PathBuf)> = Vec::new();
+
+    let posts_path = root.join("posts");
+    std::fs::create_dir_all(&posts_path)?;
+
+    let breadcrumbs = &[("Home".to_string(), std::path::PathBuf::from("/index.html"))];
+    for (doc_name, doc_id) in manifest.posts.documents.iter() {
+        let doc_path = gen_doc(
+            config,
+            handlebars,
+            manifest,
+            root,
+            breadcrumbs,
+            &posts_path,
+            doc_name,
+            *doc_id,
+            svgs,
+        )?;
+        docs.push((doc_name.to_string(), *doc_id, doc_path));
+    }
+
+    for (sub_folder_name, sub_folder_posts) in manifest.posts.folders.iter() {
+        let sub_folder_path = gen_folder(
+            config,
+            handlebars,
+            manifest,
+            root,
+            breadcrumbs,
+            &posts_path,
+            sub_folder_name,
+            sub_folder_posts,
+            svgs,
+        )?;
+        sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
+    }
+
+    let index_html = std::fs::File::create(root.join("index.html"))?;
+    handlebars.render_to_write(
+        "index",
+        &json!({
+            "title": config.title,
+            "logo": svgs[&manifest.logo][0],
+            "name": "Home",
+            "pages": svgs[&manifest.index],
+            "documents": docs.into_iter().map(|(name, id, link)| json!({
+                "name": name,
+                "svg": svgs[&id][0],
+                "link": link,
+            })).collect::<Vec<_>>(),
+            "folders": sub_folders.into_iter().map(|(name, link)| json!({
+                "name": name,
+                "link": link,
+            })).collect::<Vec<_>>(),
+        }),
+        index_html,
+    )?;
+    Ok(())
+}
+
 async fn gen(
     config: SiteConfig,
     material_path: &std::path::Path,
     build_path: &std::path::Path,
 ) -> Result<()> {
-    let mut zip_dir = &material_path.join("zip");
-    let mut manifest_file = std::fs::File::open(&material_path.join("manifest.json"))?;
+    let zip_dir = &material_path.join("zip");
+    let manifest_file = std::fs::File::open(&material_path.join("manifest.json"))?;
     let manifest: Manifest = serde_json::from_reader(manifest_file)?;
     println!("Loaded manifest {:#?}", manifest);
 
@@ -277,23 +471,13 @@ async fn gen(
     // fix svg paths to be relative to build_path
     for (_, svgs) in doc_svgs.iter_mut() {
         for svg_path in svgs.iter_mut() {
-            *svg_path = svg_path.strip_prefix(build_path)?.to_path_buf();
+            *svg_path = std::path::PathBuf::from("/")
+                .join(svg_path.strip_prefix(build_path)?.to_path_buf());
         }
     }
 
     let handlebars = config.templates.build_handlebars()?;
-    let index_html = std::fs::File::create(build_path.join("index.html"))?;
-    handlebars.render_to_write(
-        "index",
-        &json!({
-            "name": config.name,
-            "logo": doc_svgs[&manifest.logo][0],
-            "pages": doc_svgs[&manifest.index],
-            "folders":
-        }),
-        index_html,
-    )?;
-
+    gen_index(&config, &handlebars, &manifest, &build_path, &doc_svgs)?;
     std::fs::copy(config.css, build_path.join("style.css"))?;
     Ok(())
 }
