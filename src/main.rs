@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
+use rayon::prelude::*;
+
 use anyhow::{anyhow, Result};
 use handlebars::Handlebars;
 use remarkable_cloud_api::{reqwest, Client, ClientState, Document, Documents, Parent, Uuid};
@@ -470,17 +472,25 @@ async fn gen(
             true,
         )?,
     );
-    for doc_id in manifest.posts.doc_ids() {
-        doc_svgs.insert(
-            doc_id,
-            render_zip(
-                doc_id,
-                &zip_dir.join(format!("{}.zip", doc_id)),
-                &svg_root,
-                false,
-            )?,
-        );
-    }
+
+    doc_svgs.extend(
+        manifest
+            .posts
+            .doc_ids()
+            .par_iter()
+            .map(|doc_id| {
+                Ok((
+                    *doc_id,
+                    render_zip(
+                        *doc_id,
+                        &zip_dir.join(format!("{}.zip", doc_id)),
+                        &svg_root,
+                        false,
+                    )?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?,
+    );
 
     // fix svg paths to be relative to build_path
     for (_, svgs) in doc_svgs.iter_mut() {

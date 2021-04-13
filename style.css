@@ -40,13 +40,12 @@ body {
 }
 
 .navbar {
-  margin-left: 24px;
-  padding-top: 100px;
-  height: calc(100vh - 100px);
-  overflow: auto;
   display: flex;
   flex-direction: column;
-  width: 200px;
+  margin-left: 24px;
+  padding-top: 100px;
+  width: 25%;
+  max-width: 250px;
 }
 
 .nav.group {
@@ -78,7 +77,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 12px;
+  margin: 6px;
 }
 
 a {
@@ -87,6 +86,7 @@ a {
 }
 
 .nb-pages {
+  padding-top: 80px;
   flex-grow: 1;
   overflow-y: scroll;
 }
@@ -99,7 +99,7 @@ a {
 .nb-page-divider {
   margin: 0px auto;
   border-top: 1px solid black;
-  width: 10%;
+  width: 20%;
 }
 
 .gallery {
@@ -123,4 +123,20 @@ a {
 
 .breadcrumb-seperator {
   margin: 0px 4px;
+}
+
+@media (max-width: 700px) {
+  /* .navbar { */
+  /*   flex-direction: row; */
+  /* } */
+  .navbar {
+    width: unset;
+    max-width: unset;
+  }
+  .container {
+    flex-direction: column;
+  }
+  .nb-pages {
+    padding-top: 0px;
+  }
 }

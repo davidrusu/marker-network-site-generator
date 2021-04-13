@@ -5,6 +5,7 @@ authors = ["David Rusu <davidrusu.me@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+rayon = "1.5.0"
 handlebars = "3.5.4"
 tokio = { version = "1", features = ["full"] }
 lines-are-rusty = { git = "https://github.com/davidrusu/lines-are-rusty.git", branch = "changes-for-marker-network" }
