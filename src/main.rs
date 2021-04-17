@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 
@@ -20,11 +21,11 @@ struct SiteConfig {
 #[derive(Debug)]
 struct Theme {
     handlebars: Handlebars<'static>,
-    css: std::path::PathBuf,
+    css: PathBuf,
 }
 
 impl Theme {
-    fn load(theme: &std::path::Path) -> Result<Self> {
+    fn load(theme: &Path) -> Result<Self> {
         let mut handlebars = Handlebars::new();
         handlebars
             .register_template_file("index", &theme.join("index.html"))
@@ -42,11 +43,7 @@ impl Theme {
         Ok(Self { handlebars, css })
     }
 
-    fn render_index(
-        &self,
-        params: &handlebars::JsonValue,
-        gen_root: &std::path::Path,
-    ) -> Result<()> {
+    fn render_index(&self, params: &handlebars::JsonValue, gen_root: &Path) -> Result<()> {
         let f_out =
             std::fs::File::create(&gen_root.join("index.html")).context("Creating index.html")?;
         self.handlebars
@@ -55,7 +52,7 @@ impl Theme {
         Ok(())
     }
 
-    fn render_document(&self, params: &handlebars::JsonValue, out: &std::path::Path) -> Result<()> {
+    fn render_document(&self, params: &handlebars::JsonValue, out: &Path) -> Result<()> {
         let f_out = std::fs::File::create(&out).context("Creating document file for rendering")?;
         self.handlebars
             .render_to_write("document", params, f_out)
@@ -63,7 +60,7 @@ impl Theme {
         Ok(())
     }
 
-    fn render_folder(&self, params: &handlebars::JsonValue, out: &std::path::Path) -> Result<()> {
+    fn render_folder(&self, params: &handlebars::JsonValue, out: &Path) -> Result<()> {
         let f_out = std::fs::File::create(&out).context("Creating folder file for rendering")?;
         self.handlebars
             .render_to_write("folder", params, f_out)
@@ -71,7 +68,7 @@ impl Theme {
         Ok(())
     }
 
-    fn render_css(&self, gen_root: &std::path::Path) -> Result<()> {
+    fn render_css(&self, gen_root: &Path) -> Result<()> {
         std::fs::copy(&self.css, &gen_root.join("style.css"))
             .context("Copying theme css into generated site")?;
         Ok(())
@@ -79,14 +76,14 @@ impl Theme {
 }
 
 impl SiteConfig {
-    fn load(path: &std::path::Path) -> Result<Self> {
+    fn load(path: &Path) -> Result<Self> {
         let file = std::fs::File::open(path).context("Opening config file")?;
         let config = serde_json::from_reader(file).context("Parsing config file")?;
         Ok(config)
     }
 
     fn theme(&self) -> Result<Theme> {
-        let theme_dir = std::path::PathBuf::from("themes").join(&self.theme);
+        let theme_dir = PathBuf::from("themes").join(&self.theme);
         Theme::load(&theme_dir)
     }
 }
@@ -94,7 +91,7 @@ impl SiteConfig {
 #[derive(Debug, StructOpt)]
 struct Opt {
     #[structopt(parse(from_os_str))]
-    site_config_path: std::path::PathBuf,
+    site_config_path: PathBuf,
     #[structopt(subcommand)]
     action: Action,
 }
@@ -105,13 +102,13 @@ enum Action {
     Fetch {
         device_token: String,
         #[structopt(parse(from_os_str))]
-        material_path: std::path::PathBuf,
+        material_path: PathBuf,
     },
     Gen {
         #[structopt(parse(from_os_str))]
-        material_path: std::path::PathBuf,
+        material_path: PathBuf,
         #[structopt(parse(from_os_str))]
-        build_path: std::path::PathBuf,
+        build_path: PathBuf,
     },
 }
 
@@ -180,14 +177,14 @@ impl Manifest {
         Ok(Manifest { index, logo, posts })
     }
 
-    fn load(material_root: &std::path::Path) -> Result<Self> {
+    fn load(material_root: &Path) -> Result<Self> {
         let manifest_file = std::fs::File::open(&material_root.join("manifest.json"))
             .context("Opening material manifest file")?;
         let manifest = serde_json::from_reader(manifest_file).context("Parsing manifest file")?;
         Ok(manifest)
     }
 
-    fn save(&self, material_root: &std::path::Path) -> Result<()> {
+    fn save(&self, material_root: &Path) -> Result<()> {
         let manifest_file = std::fs::File::create(&material_root.join("manifest.json"))
             .context("Creating manifest file")?;
         serde_json::to_writer_pretty(manifest_file, &self).context("Writing manifest file")?;
@@ -254,7 +251,7 @@ fn build_posts_hierarchy(folder: Uuid, all_docs: &Documents) -> Posts {
     Posts { documents, folders }
 }
 
-async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path) -> Result<()> {
+async fn fetch(config: SiteConfig, client: Client, output_path: &Path) -> Result<()> {
     std::fs::create_dir_all(&output_path).context("Creating material output directory")?;
 
     let archives_dir = output_path.join("zip");
@@ -290,12 +287,12 @@ async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path
 
 fn render_svgs(
     manifest: &Manifest,
-    material_root: &std::path::Path,
-    site_root: &std::path::Path,
-) -> Result<BTreeMap<Uuid, Vec<std::path::PathBuf>>> {
+    material_root: &Path,
+    site_root: &Path,
+) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
     let zip_dir = material_root.join("zip");
 
-    let mut doc_svgs: BTreeMap<Uuid, Vec<std::path::PathBuf>> = Default::default();
+    let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
 
     doc_svgs.insert(
         manifest.index,
@@ -345,10 +342,10 @@ fn render_svgs(
 
 fn render_zip(
     id: Uuid,
-    zip_path: &std::path::Path,
-    site_root: &std::path::Path,
+    zip_path: &Path,
+    site_root: &Path,
     auto_crop: bool,
-) -> Result<Vec<std::path::PathBuf>> {
+) -> Result<Vec<PathBuf>> {
     let svg_root = site_root.join("svg");
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path).context("Opening zip file")?)
         .context("Reading ZipArchive")?;
@@ -380,7 +377,7 @@ fn render_zip(
             .context("Rendering document page svg")?;
 
             rendered_svgs.push(
-                std::path::PathBuf::from("/").join(
+                PathBuf::from("/").join(
                     output_path
                         .strip_prefix(site_root)
                         .context("Stripping site root form svg paths")?
@@ -404,13 +401,13 @@ fn gen_doc(
     config: &SiteConfig,
     theme: &Theme,
     manifest: &Manifest,
-    root: &std::path::Path,
-    breadcrumbs: &[(String, std::path::PathBuf)],
-    parent: &std::path::Path,
+    root: &Path,
+    breadcrumbs: &[(String, PathBuf)],
+    parent: &Path,
     name: &str,
     id: Uuid,
-    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
-) -> Result<std::path::PathBuf> {
+    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
+) -> Result<PathBuf> {
     let sanitized_name = sanitize(name);
     let doc_path = parent.join(format!("{}.html", sanitized_name));
 
@@ -431,7 +428,7 @@ fn gen_doc(
         )
         .context("Rendering document html")?;
 
-    Ok(std::path::PathBuf::from("/").join(
+    Ok(PathBuf::from("/").join(
         doc_path
             .strip_prefix(root)
             .context("Stripping gen root form doc html path")?
@@ -443,28 +440,28 @@ fn gen_folder(
     config: &SiteConfig,
     theme: &Theme,
     manifest: &Manifest,
-    root: &std::path::Path,
-    breadcrumbs: &[(String, std::path::PathBuf)],
-    parent: &std::path::Path,
+    root: &Path,
+    breadcrumbs: &[(String, PathBuf)],
+    parent: &Path,
     folder: &str,
     posts: &Posts,
-    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
-) -> Result<std::path::PathBuf> {
+    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
+) -> Result<PathBuf> {
     let sanitized_folder = sanitize(folder);
     let folder_path = parent.join(&sanitized_folder);
     std::fs::create_dir_all(&folder_path)
         .context("Creating folder directory before generating html")?;
 
     let folder_html_path = parent.join(format!("{}.html", sanitized_folder));
-    let folder_link = std::path::PathBuf::from("/").join(
+    let folder_link = PathBuf::from("/").join(
         folder_html_path
             .strip_prefix(root)
             .context("Stripping generated site root from folder path to get a link")?
             .to_path_buf(),
     );
 
-    let mut docs: Vec<(String, Uuid, std::path::PathBuf)> = Vec::new();
-    let mut sub_folders: Vec<(String, std::path::PathBuf)> = Vec::new();
+    let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
+    let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
 
     let mut breadcrumbs_for_children = breadcrumbs.to_vec();
     breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
@@ -532,17 +529,17 @@ fn gen_index(
     config: &SiteConfig,
     theme: &Theme,
     manifest: &Manifest,
-    svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
-    root: &std::path::Path,
+    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
+    root: &Path,
 ) -> Result<()> {
-    let mut docs: Vec<(String, Uuid, std::path::PathBuf)> = Vec::new();
-    let mut sub_folders: Vec<(String, std::path::PathBuf)> = Vec::new();
+    let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
+    let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
 
     let posts_path = root.join("posts");
     std::fs::create_dir_all(&posts_path)
         .context("Creating posts directory in generated site root")?;
 
-    let breadcrumbs = &[("Home".to_string(), std::path::PathBuf::from("/index.html"))];
+    let breadcrumbs = &[("Home".to_string(), PathBuf::from("/index.html"))];
     for (doc_name, doc_id) in manifest.posts.documents.iter() {
         let doc_path = gen_doc(
             config,
@@ -598,11 +595,7 @@ fn gen_index(
     Ok(())
 }
 
-async fn gen(
-    config: SiteConfig,
-    material_path: &std::path::Path,
-    build_path: &std::path::Path,
-) -> Result<()> {
+async fn gen(config: SiteConfig, material_path: &Path, build_path: &Path) -> Result<()> {
     let manifest = Manifest::load(&material_path).context("Loading manifest")?;
     println!("Loaded manifest {:#?}", manifest);
 
