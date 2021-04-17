@@ -9,18 +9,12 @@ use remarkable_cloud_api::{reqwest, Client, ClientState, Document, Documents, Pa
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use structopt::StructOpt;
-use zip;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SiteConfig {
     site_root: String,
     title: String,
     theme: String,
-}
-
-struct Material {
-    manifest: Manifest,
-    root: std::path::PathBuf,
 }
 
 #[derive(Debug)]
@@ -261,15 +255,15 @@ fn build_posts_hierarchy(folder: Uuid, all_docs: &Documents) -> Posts {
 }
 
 async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path) -> Result<()> {
-    std::fs::create_dir_all(&output_path).context("Creating the material output directory")?;
+    std::fs::create_dir_all(&output_path).context("Creating material output directory")?;
 
     let archives_dir = output_path.join("zip");
-    std::fs::create_dir_all(&archives_dir).context("Creating the zip archives directory")?;
+    std::fs::create_dir_all(&archives_dir).context("Creating zip archives directory")?;
 
     let documents = client
         .all_documents(false)
         .await
-        .context("Fetching all documents form rM Cloud")?;
+        .context("Fetching all document metadata from rM Cloud")?;
 
     let manifest =
         Manifest::build(config.site_root, documents).context("Building Manifest from documents")?;
@@ -299,7 +293,6 @@ fn render_svgs(
     material_root: &std::path::Path,
     site_root: &std::path::Path,
 ) -> Result<BTreeMap<Uuid, Vec<std::path::PathBuf>>> {
-    let svg_root = site_root.join("svg");
     let zip_dir = material_root.join("zip");
 
     let mut doc_svgs: BTreeMap<Uuid, Vec<std::path::PathBuf>> = Default::default();
@@ -310,7 +303,6 @@ fn render_svgs(
             manifest.index,
             &zip_dir.join(format!("{}.zip", manifest.index)),
             &site_root,
-            &svg_root,
             false,
         )
         .context("Rendering index svg")?,
@@ -322,7 +314,6 @@ fn render_svgs(
             manifest.logo,
             &zip_dir.join(format!("{}.zip", manifest.logo)),
             &site_root,
-            &svg_root,
             true,
         )
         .context("Rendering logo svg")?,
@@ -340,7 +331,6 @@ fn render_svgs(
                         *doc_id,
                         &zip_dir.join(format!("{}.zip", doc_id)),
                         &site_root,
-                        &svg_root,
                         false,
                     )
                     .context("Rendering document svg")?,
@@ -357,9 +347,9 @@ fn render_zip(
     id: Uuid,
     zip_path: &std::path::Path,
     site_root: &std::path::Path,
-    svg_root_path: &std::path::Path,
     auto_crop: bool,
 ) -> Result<Vec<std::path::PathBuf>> {
+    let svg_root = site_root.join("svg");
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path).context("Opening zip file")?)
         .context("Reading ZipArchive")?;
     let mut rendered_svgs = Vec::new();
@@ -375,7 +365,7 @@ fn render_zip(
                 .trim_start_matches(&format!("{}/", id))
                 .trim_end_matches(".rm");
 
-            let output_path = svg_root_path.join(format!("{}-{}.svg", id, page_number));
+            let output_path = svg_root.join(format!("{}-{}.svg", id, page_number));
             println!("Rendering {:?}", output_path);
             let mut output =
                 std::fs::File::create(&output_path).context("Creating output file for svg")?;
@@ -542,8 +532,8 @@ fn gen_index(
     config: &SiteConfig,
     theme: &Theme,
     manifest: &Manifest,
-    root: &std::path::Path,
     svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
+    root: &std::path::Path,
 ) -> Result<()> {
     let mut docs: Vec<(String, Uuid, std::path::PathBuf)> = Vec::new();
     let mut sub_folders: Vec<(String, std::path::PathBuf)> = Vec::new();
@@ -613,7 +603,6 @@ async fn gen(
     material_path: &std::path::Path,
     build_path: &std::path::Path,
 ) -> Result<()> {
-    let zip_dir = &material_path.join("zip");
     let manifest = Manifest::load(&material_path).context("Loading manifest")?;
     println!("Loaded manifest {:#?}", manifest);
 
@@ -624,7 +613,7 @@ async fn gen(
     let doc_svgs = render_svgs(&manifest, material_path, build_path).context("Rendering svg's")?;
 
     let theme = config.theme().context("Loading theme from config")?;
-    gen_index(&config, &theme, &manifest, &build_path, &doc_svgs)
+    gen_index(&config, &theme, &manifest, &doc_svgs, &build_path)
         .context("Generating index page")?;
     theme.render_css(build_path).context("Rendering css")?;
     Ok(())
