@@ -15,33 +15,66 @@ use zip;
 struct SiteConfig {
     site_root: String,
     title: String,
+    theme: String,
+}
+
+#[derive(Debug)]
+struct Theme {
+    handlebars: Handlebars<'static>,
     css: std::path::PathBuf,
-    templates: Templates,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Templates {
-    index: std::path::PathBuf,
-    document: std::path::PathBuf,
-    folder: std::path::PathBuf,
-}
+impl Theme {
+    fn load(theme: &std::path::Path) -> Result<Self> {
+        let mut handlebars = Handlebars::new();
+        handlebars.register_template_file("index", &theme.join("index.html"))?;
+        handlebars.register_template_file("document", &theme.join("document.html"))?;
+        handlebars.register_template_file("folder", &theme.join("folder.html"))?;
+        let css = theme.join("style.css");
+        if !css.exists() {
+            return Err(anyhow!("Missing theme css: {:?}", css));
+        }
+        Ok(Self { handlebars, css })
+    }
 
-impl Templates {
-    fn build_handlebars(&self) -> Result<Handlebars> {
-        let mut reg = Handlebars::new();
-        reg.register_template_file("index", &self.index)?;
-        reg.register_template_file("document", &self.document)?;
-        reg.register_template_file("folder", &self.folder)?;
-        Ok(reg)
+    fn render_index(
+        &self,
+        params: &handlebars::JsonValue,
+        site_root: &std::path::Path,
+    ) -> Result<()> {
+        let f_out = std::fs::File::create(&site_root.join("index.html"))?;
+        self.handlebars.render_to_write("index", params, f_out)?;
+        Ok(())
+    }
+
+    fn render_document(&self, params: &handlebars::JsonValue, out: &std::path::Path) -> Result<()> {
+        let f_out = std::fs::File::create(&out)?;
+        self.handlebars.render_to_write("document", params, f_out)?;
+        Ok(())
+    }
+
+    fn render_folder(&self, params: &handlebars::JsonValue, out: &std::path::Path) -> Result<()> {
+        let f_out = std::fs::File::create(&out)?;
+        self.handlebars.render_to_write("folder", params, f_out)?;
+        Ok(())
+    }
+
+    fn render_css(&self, site_root: &std::path::Path) -> Result<()> {
+        std::fs::copy(&self.css, &site_root.join("style.css"))?;
+        Ok(())
     }
 }
 
 impl SiteConfig {
     fn load(path: &std::path::Path) -> Result<Self> {
         let file = std::fs::File::open(path)?;
-        // let reader = BufReader::new(file);
         let config = serde_json::from_reader(file)?;
         Ok(config)
+    }
+
+    fn theme(&self) -> Result<Theme> {
+        let theme_dir = std::path::PathBuf::from("themes").join(&self.theme);
+        Theme::load(&theme_dir)
     }
 }
 
@@ -201,6 +234,7 @@ async fn fetch(config: SiteConfig, client: Client, output_path: &std::path::Path
     serde_json::to_writer_pretty(manifest_file, &manifest)?;
 
     for doc_id in manifest.doc_ids() {
+        println!("Downloading {}", doc_id);
         let zip = client.download_zip(doc_id).await?;
         let bytes = zip.into_inner().into_inner();
         let mut file = std::fs::File::create(&archives_dir.join(format!("{}.zip", doc_id)))?;
@@ -216,10 +250,6 @@ fn render_zip(
     svg_root_path: &std::path::Path,
     auto_crop: bool,
 ) -> Result<Vec<std::path::PathBuf>> {
-    println!(
-        "Rendering zip {:?} {:?} {:?} {:?}",
-        id, zip_path, svg_root_path, auto_crop
-    );
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path)?)?;
     let mut rendered_svgs = Vec::new();
     for i in 0..zip.len() {
@@ -232,7 +262,8 @@ fn render_zip(
                 .trim_start_matches(&format!("{}/", id))
                 .trim_end_matches(".rm");
 
-            let output_path = svg_root_path.join(format!("{}-{:0>3}.svg", id, page_number));
+            let output_path = svg_root_path.join(format!("{}-{}.svg", id, page_number));
+            println!("Rendering {:?}", output_path);
             let mut output = std::fs::File::create(&output_path)?;
             let debug = false;
             lines_are_rusty::render_svg(
@@ -258,7 +289,7 @@ fn sanitize(folder: &str) -> String {
 
 fn gen_doc(
     config: &SiteConfig,
-    handlebars: &Handlebars,
+    theme: &Theme,
     manifest: &Manifest,
     root: &std::path::Path,
     breadcrumbs: &[(String, std::path::PathBuf)],
@@ -269,10 +300,8 @@ fn gen_doc(
 ) -> Result<std::path::PathBuf> {
     let sanitized_name = sanitize(name);
     let doc_path = parent.join(format!("{}.html", sanitized_name));
-    let doc_html = std::fs::File::create(&doc_path)?;
 
-    handlebars.render_to_write(
-        "document",
+    theme.render_document(
         &json!({
             "title": config.title,
             "name": name,
@@ -284,7 +313,7 @@ fn gen_doc(
             "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
             "pages": svgs[&id],
         }),
-        doc_html,
+        &doc_path,
     )?;
 
     Ok(std::path::PathBuf::from("/").join(doc_path.strip_prefix(root)?.to_path_buf()))
@@ -292,7 +321,7 @@ fn gen_doc(
 
 fn gen_folder(
     config: &SiteConfig,
-    handlebars: &Handlebars,
+    theme: &Theme,
     manifest: &Manifest,
     root: &std::path::Path,
     breadcrumbs: &[(String, std::path::PathBuf)],
@@ -317,7 +346,7 @@ fn gen_folder(
     for (doc_name, doc_id) in posts.documents.iter() {
         let doc_path = gen_doc(
             config,
-            handlebars,
+            theme,
             manifest,
             root,
             &breadcrumbs_for_children,
@@ -332,7 +361,7 @@ fn gen_folder(
     for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
         let sub_folder_path = gen_folder(
             config,
-            handlebars,
+            theme,
             manifest,
             root,
             &breadcrumbs_for_children,
@@ -344,9 +373,7 @@ fn gen_folder(
         sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
     }
 
-    let folder_html = std::fs::File::create(&folder_html_path)?;
-    handlebars.render_to_write(
-        "folder",
+    theme.render_folder(
         &json!({
             "title": config.title,
             "name": folder,
@@ -366,7 +393,7 @@ fn gen_folder(
                 "link": link,
             })).collect::<Vec<_>>(),
         }),
-        folder_html,
+        &folder_html_path,
     )?;
 
     Ok(folder_link)
@@ -374,7 +401,7 @@ fn gen_folder(
 
 fn gen_index(
     config: &SiteConfig,
-    handlebars: &Handlebars,
+    theme: &Theme,
     manifest: &Manifest,
     root: &std::path::Path,
     svgs: &BTreeMap<Uuid, Vec<std::path::PathBuf>>,
@@ -389,7 +416,7 @@ fn gen_index(
     for (doc_name, doc_id) in manifest.posts.documents.iter() {
         let doc_path = gen_doc(
             config,
-            handlebars,
+            theme,
             manifest,
             root,
             breadcrumbs,
@@ -404,7 +431,7 @@ fn gen_index(
     for (sub_folder_name, sub_folder_posts) in manifest.posts.folders.iter() {
         let sub_folder_path = gen_folder(
             config,
-            handlebars,
+            theme,
             manifest,
             root,
             breadcrumbs,
@@ -416,9 +443,7 @@ fn gen_index(
         sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
     }
 
-    let index_html = std::fs::File::create(root.join("index.html"))?;
-    handlebars.render_to_write(
-        "index",
+    theme.render_index(
         &json!({
             "title": config.title,
             "logo": svgs[&manifest.logo][0],
@@ -434,7 +459,7 @@ fn gen_index(
                 "link": link,
             })).collect::<Vec<_>>(),
         }),
-        index_html,
+        root,
     )?;
     Ok(())
 }
@@ -500,9 +525,9 @@ async fn gen(
         }
     }
 
-    let handlebars = config.templates.build_handlebars()?;
-    gen_index(&config, &handlebars, &manifest, &build_path, &doc_svgs)?;
-    std::fs::copy(config.css, build_path.join("style.css"))?;
+    let theme = config.theme()?;
+    gen_index(&config, &theme, &manifest, &build_path, &doc_svgs)?;
+    theme.render_css(build_path)?;
     Ok(())
 }
 
