@@ -361,9 +361,9 @@ fn render_zip(
                 .name()
                 .trim_start_matches(&format!("{}/", id))
                 .trim_end_matches(".rm");
+            println!("Rendering {} p{} svg", id, page_number);
 
             let output_path = svg_root.join(format!("{}-{}.svg", id, page_number));
-            println!("Rendering {:?}", output_path);
             let mut output =
                 std::fs::File::create(&output_path).context("Creating output file for svg")?;
             let debug = false;
