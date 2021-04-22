@@ -443,7 +443,8 @@ impl Site {
 
         let breadcrumbs = &[("Home".to_string(), PathBuf::from("/index.html"))];
         for (doc_name, doc_id) in self.manifest.posts.documents.iter() {
-            let doc_path = gen_doc(self, breadcrumbs, &posts_path, doc_name, *doc_id)
+            let doc_path = self
+                .gen_doc(breadcrumbs, &posts_path, doc_name, *doc_id)
                 .context("Generating a top level document")?;
             docs.push((doc_name.to_string(), *doc_id, doc_path));
         }
