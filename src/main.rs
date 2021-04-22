@@ -150,22 +150,35 @@ struct Manifest {
 }
 
 impl Manifest {
-    fn build(site_root: String, docs: Documents) -> Result<Self> {
-        let root_nodes = docs.children(Parent::Root);
-        let site_roots: Vec<_> = root_nodes
-            .iter()
-            .filter(|d| d.visible_name == site_root)
-            .collect();
+    fn build(root_folder: String, docs: Documents) -> Result<Self> {
+        let site_root = if let Ok(id) = Uuid::parse_str(&root_folder) {
+            let root_doc = docs.get(&id).ok_or(anyhow!("No document with ID {}", id))?;
 
-        if site_roots.len() != 1 {
-            return Err(anyhow!(
-                "Make sure to have one folder named '{}' on your remarkable you are synced with rM cloud, found {} folders",
-                site_root,
+            if root_doc.doc_type != "CollectionType" {
+                return Err(anyhow!("Site root must be a folder: {}", root_doc.doc_type));
+            }
+
+            root_doc.clone()
+        } else {
+            let root_nodes = docs.children(Parent::Root);
+            let mut site_roots: Vec<_> = root_nodes
+                .iter()
+                .filter(|d| d.doc_type == "CollectionType")
+                .filter(|d| d.visible_name == root_folder)
+                .collect();
+
+            if site_roots.len() != 1 {
+                return Err(anyhow!(
+                "Make sure to have one folder named '{}' on your remarkable. And make sure you are synced with rM cloud, found {} folders",
+                root_folder,
                 site_roots.len()
             ));
-        }
+            }
 
-        let site_root_docs = docs.children(Parent::Node(site_roots[0].id));
+            site_roots.pop().unwrap().clone()
+        };
+
+        let site_root_docs = docs.children(Parent::Node(site_root.id));
         let index = find_index_nb(&site_root_docs)
             .context("Finding index notebook")?
             .id;
