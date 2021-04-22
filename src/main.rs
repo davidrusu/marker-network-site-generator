@@ -285,7 +285,7 @@ async fn fetch(config: SiteConfig, client: Client, output_path: &Path) -> Result
     Ok(())
 }
 
-fn render_svgs(
+fn render_all_svgs(
     manifest: &Manifest,
     material_root: &Path,
     site_root: &Path,
@@ -347,8 +347,8 @@ fn render_zip(
     auto_crop: bool,
 ) -> Result<Vec<PathBuf>> {
     let svg_root = site_root.join("svg");
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path).context("Opening zip file")?)
-        .context("Reading ZipArchive")?;
+    let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
+    let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
     let mut rendered_svgs = Vec::new();
     for i in 0..zip.len() {
         let mut file = zip
@@ -356,7 +356,7 @@ fn render_zip(
             .context("Attempting to index into the zip files")?;
         if file.name().ends_with(".rm") {
             let lines = lines_are_rusty::LinesData::parse(&mut file).context("Parsing .rm file")?;
-            // file name has pattern <uuid>/<page-num>.rm, we just want the page number.
+            // file name has pattern <uuid>/<page-num>.rm, we just want the page-num.
             let page_number = file
                 .name()
                 .trim_start_matches(&format!("{}/", id))
@@ -390,62 +390,87 @@ fn render_zip(
     Ok(rendered_svgs)
 }
 
-fn sanitize(folder: &str) -> String {
-    folder
-        .chars()
+fn sanitize(name: &str) -> String {
+    name.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
 }
 
+struct Site {
+    root: PathBuf,
+    theme: Theme,
+    manifest: Manifest,
+    config: SiteConfig,
+    svgs: BTreeMap<Uuid, Vec<PathBuf>>, // Rendered notebook pages
+}
+
+impl Site {
+    fn title(&self) -> &str {
+        &self.config.title
+    }
+
+    fn logo_svg(&self) -> &Path {
+        self.doc_first_page(self.manifest.logo)
+    }
+
+    fn index_pages(&self) -> &[PathBuf] {
+        self.doc_pages(self.manifest.index)
+    }
+
+    fn doc_first_page(&self, id: Uuid) -> &Path {
+        &self.doc_pages(id)[0]
+    }
+
+    /// Panics if Doc ID does not exist.
+    fn doc_pages(&self, id: Uuid) -> &[PathBuf] {
+        &self.svgs[&id]
+    }
+
+    fn relative_to_root(&self, path: &Path) -> Result<PathBuf> {
+        Ok(PathBuf::from("/").join(
+            path.strip_prefix(&self.root)
+                .with_context(|| format!("Stripping root from path {:?}", path))?,
+        ))
+    }
+}
+
 fn gen_doc(
-    config: &SiteConfig,
-    theme: &Theme,
-    manifest: &Manifest,
-    root: &Path,
+    site: &Site,
     breadcrumbs: &[(String, PathBuf)],
     parent: &Path,
     name: &str,
     id: Uuid,
-    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
 ) -> Result<PathBuf> {
     let sanitized_name = sanitize(name);
+    // TODO: replace this with a breadcrumbs_to_path method on the Site
     let doc_path = parent.join(format!("{}.html", sanitized_name));
 
-    theme
+    site.theme
         .render_document(
             &json!({
-                "title": config.title,
+                "title": site.title(),
                 "name": name,
                 "breadcrumbs": breadcrumbs
                     .iter()
-                    .map(|(name, link)| json!({"name": name, "link": link}))
+                    .map(|(crumb, link)| json!({"name": crumb, "link": link}))
                     .collect::<Vec<_>>(),
-                "logo": svgs[&manifest.logo][0],
+                "logo": site.logo_svg(),
                 "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                "pages": svgs[&id],
+                "pages": site.doc_pages(id),
             }),
             &doc_path,
         )
         .context("Rendering document html")?;
 
-    Ok(PathBuf::from("/").join(
-        doc_path
-            .strip_prefix(root)
-            .context("Stripping gen root form doc html path")?
-            .to_path_buf(),
-    ))
+    site.relative_to_root(&doc_path)
 }
 
 fn gen_folder(
-    config: &SiteConfig,
-    theme: &Theme,
-    manifest: &Manifest,
-    root: &Path,
+    site: &Site,
     breadcrumbs: &[(String, PathBuf)],
     parent: &Path,
     folder: &str,
     posts: &Posts,
-    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
 ) -> Result<PathBuf> {
     let sanitized_folder = sanitize(folder);
     let folder_path = parent.join(&sanitized_folder);
@@ -453,12 +478,7 @@ fn gen_folder(
         .context("Creating folder directory before generating html")?;
 
     let folder_html_path = parent.join(format!("{}.html", sanitized_folder));
-    let folder_link = PathBuf::from("/").join(
-        folder_html_path
-            .strip_prefix(root)
-            .context("Stripping generated site root from folder path to get a link")?
-            .to_path_buf(),
-    );
+    let folder_link = site.relative_to_root(&folder_html_path)?;
 
     let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
     let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
@@ -467,15 +487,11 @@ fn gen_folder(
     breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
     for (doc_name, doc_id) in posts.documents.iter() {
         let doc_path = gen_doc(
-            config,
-            theme,
-            manifest,
-            root,
+            site,
             &breadcrumbs_for_children,
             &folder_path,
             doc_name,
             *doc_id,
-            svgs,
         )
         .context("Generating a doc inside a folder")?;
         docs.push((doc_name.to_string(), *doc_id, doc_path));
@@ -483,26 +499,22 @@ fn gen_folder(
 
     for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
         let sub_folder_path = gen_folder(
-            config,
-            theme,
-            manifest,
-            root,
+            site,
             &breadcrumbs_for_children,
             &folder_path,
             sub_folder_name,
             sub_folder_posts,
-            svgs,
         )
         .context("Generating a sub-folder inside a folder")?;
         sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
     }
 
-    theme
+    site.theme
         .render_folder(
             &json!({
-                "title": config.title,
+                "title": site.title(),
                 "name": folder,
-                "logo": svgs[&manifest.logo][0],
+                "logo": site.logo_svg(),
                 "breadcrumbs": breadcrumbs
                     .iter()
                     .map(|(name, link)| json!({"name": name, "link": link}))
@@ -510,7 +522,7 @@ fn gen_folder(
                 "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
                 "documents": docs.into_iter().map(|(name, id, link)| json!({
                     "name": name,
-                    "svg": svgs[&id][0],
+                    "svg": site.doc_first_page(id),
                     "link": link,
                 })).collect::<Vec<_>>(),
                 "folders": sub_folders.into_iter().map(|(name, link)| json!({
@@ -525,63 +537,43 @@ fn gen_folder(
     Ok(folder_link)
 }
 
-fn gen_index(
-    config: &SiteConfig,
-    theme: &Theme,
-    manifest: &Manifest,
-    svgs: &BTreeMap<Uuid, Vec<PathBuf>>,
-    root: &Path,
-) -> Result<()> {
+fn gen_index(site: &Site) -> Result<()> {
     let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
     let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
 
-    let posts_path = root.join("posts");
+    let posts_path = site.root.join("posts");
     std::fs::create_dir_all(&posts_path)
         .context("Creating posts directory in generated site root")?;
 
     let breadcrumbs = &[("Home".to_string(), PathBuf::from("/index.html"))];
-    for (doc_name, doc_id) in manifest.posts.documents.iter() {
-        let doc_path = gen_doc(
-            config,
-            theme,
-            manifest,
-            root,
-            breadcrumbs,
-            &posts_path,
-            doc_name,
-            *doc_id,
-            svgs,
-        )
-        .context("Generating a top level document")?;
+    for (doc_name, doc_id) in site.manifest.posts.documents.iter() {
+        let doc_path = gen_doc(site, breadcrumbs, &posts_path, doc_name, *doc_id)
+            .context("Generating a top level document")?;
         docs.push((doc_name.to_string(), *doc_id, doc_path));
     }
 
-    for (sub_folder_name, sub_folder_posts) in manifest.posts.folders.iter() {
+    for (sub_folder_name, sub_folder_posts) in site.manifest.posts.folders.iter() {
         let sub_folder_path = gen_folder(
-            config,
-            theme,
-            manifest,
-            root,
+            site,
             breadcrumbs,
             &posts_path,
             sub_folder_name,
             sub_folder_posts,
-            svgs,
         )
         .context("Generating a top-level folder")?;
         sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
     }
 
-    theme
+    site.theme
         .render_index(
             &json!({
-                "title": config.title,
-                "logo": svgs[&manifest.logo][0],
+                "title": site.title(),
+                "logo": site.logo_svg(),
                 "name": "Home",
-                "pages": svgs[&manifest.index],
+                "pages": site.index_pages(),
                 "documents": docs.into_iter().map(|(name, id, link)| json!({
                     "name": name,
-                    "svg": svgs[&id][0],
+                    "svg": site.doc_first_page(id), // TODO: Site::doc_first_page(id)
                     "link": link,
                 })).collect::<Vec<_>>(),
                 "folders": sub_folders.into_iter().map(|(name, link)| json!({
@@ -589,26 +581,34 @@ fn gen_index(
                     "link": link,
                 })).collect::<Vec<_>>(),
             }),
-            root,
+            &site.root,
         )
         .context("Rendering index.html")?;
     Ok(())
 }
 
-async fn gen(config: SiteConfig, material_path: &Path, build_path: &Path) -> Result<()> {
+async fn gen(config: SiteConfig, material_path: PathBuf, root: PathBuf) -> Result<()> {
     let manifest = Manifest::load(&material_path).context("Loading manifest")?;
     println!("Loaded manifest {:#?}", manifest);
 
-    let svg_root = build_path.join("svg");
-    std::fs::create_dir_all(&build_path).context("creating the generated site directory")?;
+    let svg_root = root.join("svg");
+    std::fs::create_dir_all(&root).context("creating the generated site directory")?;
     std::fs::create_dir_all(&svg_root).context("creating the generated site svg directory")?;
 
-    let doc_svgs = render_svgs(&manifest, material_path, build_path).context("Rendering svg's")?;
+    let svgs = render_all_svgs(&manifest, &material_path, &root).context("Rendering svg's")?;
 
     let theme = config.theme().context("Loading theme from config")?;
-    gen_index(&config, &theme, &manifest, &doc_svgs, &build_path)
-        .context("Generating index page")?;
-    theme.render_css(build_path).context("Rendering css")?;
+    theme.render_css(&root).context("Rendering css")?;
+
+    let site = Site {
+        root,
+        theme,
+        manifest,
+        config,
+        svgs,
+    };
+
+    gen_index(&site).context("Generating index page")?;
     Ok(())
 }
 
@@ -644,7 +644,7 @@ async fn main() -> Result<()> {
             material_path,
             build_path,
         } => {
-            gen(site_config, &material_path, &build_path)
+            gen(site_config, material_path, build_path)
                 .await
                 .context("Generating site")?;
         }
