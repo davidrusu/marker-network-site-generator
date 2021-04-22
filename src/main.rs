@@ -482,37 +482,37 @@ impl Site {
             .context("Rendering index.html")?;
         Ok(())
     }
-}
 
-fn gen_doc(
-    site: &Site,
-    breadcrumbs: &[(String, PathBuf)],
-    parent: &Path,
-    name: &str,
-    id: Uuid,
-) -> Result<PathBuf> {
-    let sanitized_name = sanitize(name);
-    // TODO: replace this with a breadcrumbs_to_path method on the Site
-    let doc_path = parent.join(format!("{}.html", sanitized_name));
+    fn gen_doc(
+        &self,
+        breadcrumbs: &[(String, PathBuf)],
+        parent: &Path,
+        name: &str,
+        id: Uuid,
+    ) -> Result<PathBuf> {
+        let sanitized_name = sanitize(name);
+        // TODO: replace this with a breadcrumbs_to_path method on the Site
+        let doc_path = parent.join(format!("{}.html", sanitized_name));
 
-    site.theme
-        .render_document(
-            &json!({
-                "title": site.title(),
-                "name": name,
-                "breadcrumbs": breadcrumbs
-                    .iter()
-                    .map(|(crumb, link)| json!({"name": crumb, "link": link}))
-                    .collect::<Vec<_>>(),
-                "logo": site.logo_svg(),
-                "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                "pages": site.doc_pages(id),
-            }),
-            &doc_path,
-        )
-        .context("Rendering document html")?;
+        self.theme
+            .render_document(
+                &json!({
+                    "title": self.title(),
+                    "name": name,
+                    "breadcrumbs": breadcrumbs
+                        .iter()
+                        .map(|(crumb, link)| json!({"name": crumb, "link": link}))
+                        .collect::<Vec<_>>(),
+                    "logo": self.logo_svg(),
+                    "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
+                    "pages": self.doc_pages(id),
+                }),
+                &doc_path,
+            )
+            .context("Rendering document html")?;
 
-    site.relative_to_root(&doc_path)
+        self.relative_to_root(&doc_path)
+    }
 }
 
 fn gen_folder(
@@ -536,14 +536,9 @@ fn gen_folder(
     let mut breadcrumbs_for_children = breadcrumbs.to_vec();
     breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
     for (doc_name, doc_id) in posts.documents.iter() {
-        let doc_path = gen_doc(
-            site,
-            &breadcrumbs_for_children,
-            &folder_path,
-            doc_name,
-            *doc_id,
-        )
-        .context("Generating a doc inside a folder")?;
+        let doc_path = site
+            .gen_doc(&breadcrumbs_for_children, &folder_path, doc_name, *doc_id)
+            .context("Generating a doc inside a folder")?;
         docs.push((doc_name.to_string(), *doc_id, doc_path));
     }
 
