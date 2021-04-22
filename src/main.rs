@@ -450,14 +450,9 @@ impl Site {
         }
 
         for (sub_folder_name, sub_folder_posts) in self.manifest.posts.folders.iter() {
-            let sub_folder_path = gen_folder(
-                self,
-                breadcrumbs,
-                &posts_path,
-                sub_folder_name,
-                sub_folder_posts,
-            )
-            .context("Generating a top-level folder")?;
+            let sub_folder_path = self
+                .gen_folder(breadcrumbs, &posts_path, sub_folder_name, sub_folder_posts)
+                .context("Generating a top-level folder")?;
             sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
         }
 
@@ -514,73 +509,73 @@ impl Site {
 
         self.relative_to_root(&doc_path)
     }
-}
 
-fn gen_folder(
-    site: &Site,
-    breadcrumbs: &[(String, PathBuf)],
-    parent: &Path,
-    folder: &str,
-    posts: &Posts,
-) -> Result<PathBuf> {
-    let sanitized_folder = sanitize(folder);
-    let folder_path = parent.join(&sanitized_folder);
-    std::fs::create_dir_all(&folder_path)
-        .context("Creating folder directory before generating html")?;
+    fn gen_folder(
+        &self,
+        breadcrumbs: &[(String, PathBuf)],
+        parent: &Path,
+        folder: &str,
+        posts: &Posts,
+    ) -> Result<PathBuf> {
+        let sanitized_folder = sanitize(folder);
+        let folder_path = parent.join(&sanitized_folder);
+        std::fs::create_dir_all(&folder_path)
+            .context("Creating folder directory before generating html")?;
 
-    let folder_html_path = parent.join(format!("{}.html", sanitized_folder));
-    let folder_link = site.relative_to_root(&folder_html_path)?;
+        let folder_html_path = parent.join(format!("{}.html", sanitized_folder));
+        let folder_link = self.relative_to_root(&folder_html_path)?;
 
-    let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
-    let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
+        let mut docs: Vec<(String, Uuid, PathBuf)> = Vec::new();
+        let mut sub_folders: Vec<(String, PathBuf)> = Vec::new();
 
-    let mut breadcrumbs_for_children = breadcrumbs.to_vec();
-    breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
-    for (doc_name, doc_id) in posts.documents.iter() {
-        let doc_path = site
-            .gen_doc(&breadcrumbs_for_children, &folder_path, doc_name, *doc_id)
-            .context("Generating a doc inside a folder")?;
-        docs.push((doc_name.to_string(), *doc_id, doc_path));
+        let mut breadcrumbs_for_children = breadcrumbs.to_vec();
+        breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
+        for (doc_name, doc_id) in posts.documents.iter() {
+            let doc_path = self
+                .gen_doc(&breadcrumbs_for_children, &folder_path, doc_name, *doc_id)
+                .context("Generating a doc inside a folder")?;
+            docs.push((doc_name.to_string(), *doc_id, doc_path));
+        }
+
+        for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
+            let sub_folder_path = self
+                .gen_folder(
+                    &breadcrumbs_for_children,
+                    &folder_path,
+                    sub_folder_name,
+                    sub_folder_posts,
+                )
+                .context("Generating a sub-folder inside a folder")?;
+            sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
+        }
+
+        self.theme
+            .render_folder(
+                &json!({
+                    "title": self.title(),
+                    "name": folder,
+                    "logo": self.logo_svg(),
+                    "breadcrumbs": breadcrumbs
+                        .iter()
+                        .map(|(name, link)| json!({"name": name, "link": link}))
+                        .collect::<Vec<_>>(),
+                    "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
+                    "documents": docs.into_iter().map(|(name, id, link)| json!({
+                        "name": name,
+                        "svg": self.doc_first_page(id),
+                        "link": link,
+                    })).collect::<Vec<_>>(),
+                    "folders": sub_folders.into_iter().map(|(name, link)| json!({
+                        "name": name,
+                        "link": link,
+                    })).collect::<Vec<_>>(),
+                }),
+                &folder_html_path,
+            )
+            .context("Rendering folder html")?;
+
+        Ok(folder_link)
     }
-
-    for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
-        let sub_folder_path = gen_folder(
-            site,
-            &breadcrumbs_for_children,
-            &folder_path,
-            sub_folder_name,
-            sub_folder_posts,
-        )
-        .context("Generating a sub-folder inside a folder")?;
-        sub_folders.push((sub_folder_name.to_string(), sub_folder_path));
-    }
-
-    site.theme
-        .render_folder(
-            &json!({
-                "title": site.title(),
-                "name": folder,
-                "logo": site.logo_svg(),
-                "breadcrumbs": breadcrumbs
-                    .iter()
-                    .map(|(name, link)| json!({"name": name, "link": link}))
-                    .collect::<Vec<_>>(),
-                "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                "documents": docs.into_iter().map(|(name, id, link)| json!({
-                    "name": name,
-                    "svg": site.doc_first_page(id),
-                    "link": link,
-                })).collect::<Vec<_>>(),
-                "folders": sub_folders.into_iter().map(|(name, link)| json!({
-                    "name": name,
-                    "link": link,
-                })).collect::<Vec<_>>(),
-            }),
-            &folder_html_path,
-        )
-        .context("Rendering folder html")?;
-
-    Ok(folder_link)
 }
 
 async fn gen(config: SiteConfig, material_path: PathBuf, root: PathBuf) -> Result<()> {
