@@ -15,13 +15,15 @@ pub struct Manifest {
 impl Manifest {
     pub fn build(root_folder: String, docs: Documents) -> Result<Self> {
         let site_root = if let Ok(id) = Uuid::parse_str(&root_folder) {
-            let root_doc = docs.get(&id).ok_or(anyhow!("No document with ID {}", id))?;
+            let root_doc = docs
+                .get(&id)
+                .ok_or_else(|| anyhow!("No document with ID {}", id))?;
 
             if root_doc.doc_type != "CollectionType" {
                 return Err(anyhow!("Site root must be a folder: {}", root_doc.doc_type));
             }
 
-            root_doc.clone()
+            root_doc.to_owned()
         } else {
             let root_nodes = docs.children(Parent::Root);
             let mut site_roots: Vec<_> = root_nodes
@@ -38,7 +40,7 @@ impl Manifest {
             ));
             }
 
-            site_roots.pop().unwrap().clone()
+            site_roots.pop().unwrap().to_owned()
         };
 
         let index = Self::root_doc_by_name("Index", site_root.id, &docs)
@@ -71,7 +73,7 @@ impl Manifest {
             .collect()
     }
 
-    fn root_doc_by_name<'a>(doc_name: &str, root_id: Uuid, docs: &Documents) -> Result<Uuid> {
+    fn root_doc_by_name(doc_name: &str, root_id: Uuid, docs: &Documents) -> Result<Uuid> {
         let mut matching_docs = docs
             .children(Parent::Node(root_id))
             .into_iter()
@@ -101,7 +103,7 @@ impl Posts {
             .collect()
     }
 
-    fn build<'a>(root_id: Uuid, docs: &Documents) -> Result<Posts> {
+    fn build(root_id: Uuid, docs: &Documents) -> Result<Posts> {
         let mut matching_docs = docs
             .children(Parent::Node(root_id))
             .into_iter()
