@@ -4,98 +4,23 @@ use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 
-use anyhow::{anyhow, Context, Result};
-use handlebars::Handlebars;
+use anyhow::{Context, Result};
 use remarkable_cloud_api::{reqwest, Client, ClientState, Uuid};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use structopt::StructOpt;
 
+mod config;
 mod manifest;
+mod theme;
 
+use config::Config;
 use manifest::{Manifest, Posts};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SiteConfig {
-    site_root: String,
-    title: String,
-    theme: String,
-}
-
-impl SiteConfig {
-    fn load(path: &Path) -> Result<Self> {
-        let file = std::fs::File::open(path).context("Opening config file")?;
-        let config = serde_json::from_reader(file).context("Parsing config file")?;
-        Ok(config)
-    }
-
-    fn theme(&self) -> Result<Theme> {
-        let theme_dir = PathBuf::from("themes").join(&self.theme);
-        Theme::load(&theme_dir)
-    }
-}
-
-#[derive(Debug)]
-struct Theme {
-    handlebars: Handlebars<'static>,
-    css: PathBuf,
-}
-
-impl Theme {
-    fn load(theme: &Path) -> Result<Self> {
-        let mut handlebars = Handlebars::new();
-        handlebars
-            .register_template_file("index", &theme.join("index.html"))
-            .context("Registering index template")?;
-        handlebars
-            .register_template_file("document", &theme.join("document.html"))
-            .context("Registering document template")?;
-        handlebars
-            .register_template_file("folder", &theme.join("folder.html"))
-            .context("Registering folder template")?;
-        let css = theme.join("style.css");
-        if !css.exists() {
-            return Err(anyhow!("Missing theme css: {:?}", css));
-        }
-        Ok(Self { handlebars, css })
-    }
-
-    fn render_index(&self, params: &handlebars::JsonValue, gen_root: &Path) -> Result<()> {
-        let f_out =
-            std::fs::File::create(&gen_root.join("index.html")).context("Creating index.html")?;
-        self.handlebars
-            .render_to_write("index", params, f_out)
-            .context("Rendering index.html")?;
-        Ok(())
-    }
-
-    fn render_document(&self, params: &handlebars::JsonValue, out: &Path) -> Result<()> {
-        let f_out = std::fs::File::create(&out).context("Creating document file for rendering")?;
-        self.handlebars
-            .render_to_write("document", params, f_out)
-            .context("Rendering document template")?;
-        Ok(())
-    }
-
-    fn render_folder(&self, params: &handlebars::JsonValue, out: &Path) -> Result<()> {
-        let f_out = std::fs::File::create(&out).context("Creating folder file for rendering")?;
-        self.handlebars
-            .render_to_write("folder", params, f_out)
-            .context("Cendering folder template")?;
-        Ok(())
-    }
-
-    fn render_css(&self, gen_root: &Path) -> Result<()> {
-        std::fs::copy(&self.css, &gen_root.join("style.css"))
-            .context("Copying theme css into generated site")?;
-        Ok(())
-    }
-}
+use theme::Theme;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
     #[structopt(parse(from_os_str))]
-    site_config_path: PathBuf,
+    config_path: PathBuf,
     #[structopt(subcommand)]
     action: Action,
 }
@@ -116,7 +41,7 @@ enum Action {
     },
 }
 
-async fn fetch(config: SiteConfig, client: Client, output_path: &Path) -> Result<()> {
+async fn fetch(config: Config, client: Client, output_path: &Path) -> Result<()> {
     std::fs::create_dir_all(&output_path).context("Creating material output directory")?;
 
     let archives_dir = output_path.join("zip");
@@ -263,9 +188,9 @@ fn sanitize(name: &str) -> String {
 
 struct Site {
     root: PathBuf,
-    theme: Theme,
+    config: Config,
     manifest: Manifest,
-    config: SiteConfig,
+    theme: Theme,
     svgs: BTreeMap<Uuid, Vec<PathBuf>>, // Rendered notebook pages
 }
 
@@ -443,7 +368,7 @@ impl Site {
     }
 }
 
-async fn gen(config: SiteConfig, material_path: PathBuf, root: PathBuf) -> Result<()> {
+async fn gen(config: Config, material_path: PathBuf, root: PathBuf) -> Result<()> {
     let manifest = Manifest::load(&material_path).context("Loading manifest")?;
     println!("Loaded manifest {:#?}", manifest);
 
@@ -458,9 +383,9 @@ async fn gen(config: SiteConfig, material_path: PathBuf, root: PathBuf) -> Resul
 
     let site = Site {
         root,
-        theme,
-        manifest,
         config,
+        manifest,
+        theme,
         svgs,
     };
 
@@ -471,7 +396,7 @@ async fn gen(config: SiteConfig, material_path: PathBuf, root: PathBuf) -> Resul
 #[tokio::main]
 async fn main() -> Result<()> {
     let opt = Opt::from_args();
-    let site_config = SiteConfig::load(&opt.site_config_path).context("Loading site config")?;
+    let config = Config::load(&opt.config_path).context("Loading site config")?;
 
     match opt.action {
         Action::Fetch {
@@ -492,7 +417,7 @@ async fn main() -> Result<()> {
                 .refresh_state()
                 .await
                 .context("Refreshing rM Cloud auth tokens")?;
-            fetch(site_config, client, &material_path)
+            fetch(config, client, &material_path)
                 .await
                 .context("Fetching site data")?;
         }
@@ -500,7 +425,7 @@ async fn main() -> Result<()> {
             material_path,
             build_path,
         } => {
-            gen(site_config, material_path, build_path)
+            gen(config, material_path, build_path)
                 .await
                 .context("Generating site")?;
         }
