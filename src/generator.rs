@@ -49,8 +49,8 @@ impl Generator {
         self.doc_first_page(self.manifest.logo)
     }
 
-    fn index_pages(&self) -> &[PathBuf] {
-        self.doc_pages(self.manifest.index)
+    fn home_pages(&self) -> &[PathBuf] {
+        self.doc_pages(self.manifest.home)
     }
 
     fn doc_first_page(&self, id: Uuid) -> &Path {
@@ -98,7 +98,7 @@ impl Generator {
                     "title": self.title(),
                     "logo": self.logo_svg(),
                     "name": "Home",
-                    "pages": self.index_pages(),
+                    "pages": self.home_pages(),
                     "documents": docs.into_iter().map(|(name, id, link)| json!({
                         "name": name,
                         "svg": self.doc_first_page(id),
@@ -227,10 +227,10 @@ fn render_all_svgs(
     let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
 
     doc_svgs.insert(
-        manifest.index,
+        manifest.home,
         render_notebook_zip(
-            manifest.index,
-            &zip_dir.join(format!("{}.zip", manifest.index)),
+            manifest.home,
+            &zip_dir.join(format!("{}.zip", manifest.home)),
             &site_root,
             false,
         )

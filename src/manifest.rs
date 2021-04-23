@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
-    pub index: Uuid,
+    pub home: Uuid,
     pub logo: Uuid,
     pub posts: Posts,
 }
@@ -43,13 +43,13 @@ impl Manifest {
             site_roots.pop().unwrap().to_owned()
         };
 
-        let index = Self::root_doc_by_name("Index", site_root.id, &docs)
-            .context("Looking for 'Index' notebook")?;
+        let home = Self::root_doc_by_name("Home", site_root.id, &docs)
+            .context("Looking for 'Home' notebook")?;
         let logo = Self::root_doc_by_name("Logo", site_root.id, &docs)
             .context("Looking for 'Logo' notebook")?;
         let posts = Posts::build(site_root.id, &docs).context("Looking for 'Posts' folder")?;
 
-        Ok(Manifest { index, logo, posts })
+        Ok(Manifest { home, logo, posts })
     }
 
     pub fn load(material_root: &Path) -> Result<Self> {
@@ -67,7 +67,7 @@ impl Manifest {
     }
 
     pub fn doc_ids(&self) -> Vec<Uuid> {
-        std::iter::once(self.index)
+        std::iter::once(self.home)
             .chain(std::iter::once(self.logo))
             .chain(self.posts.doc_ids())
             .collect()
