@@ -6,10 +6,14 @@ use rayon::prelude::*;
 
 use anyhow::{anyhow, Context, Result};
 use handlebars::Handlebars;
-use remarkable_cloud_api::{reqwest, Client, ClientState, Document, Documents, Parent, Uuid};
+use remarkable_cloud_api::{reqwest, Client, ClientState, Uuid};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use structopt::StructOpt;
+
+mod manifest;
+
+use manifest::{Manifest, Posts};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SiteConfig {
@@ -110,158 +114,6 @@ enum Action {
         #[structopt(parse(from_os_str))]
         build_path: PathBuf,
     },
-}
-
-fn find_index_nb<'a>(docs: &[&'a Document]) -> Result<&'a Document> {
-    let mut matching_docs = docs
-        .iter()
-        .filter(|d| d.visible_name == "Index" && d.doc_type == "DocumentType");
-
-    match (matching_docs.next(), matching_docs.next()) {
-        (Some(index), None) => Ok(index),
-        (None, None) => Err(anyhow!("Missing 'Index' notebook in site root")),
-        (Some(a), Some(b)) => Err(anyhow!(
-            "Multiple 'Index' notebooks in site root: {:?} {:?}",
-            a,
-            b
-        )),
-        (None, Some(_)) => panic!("Impossible!"),
-    }
-}
-
-fn find_logo_nb<'a>(docs: &[&'a Document]) -> Result<&'a Document> {
-    let mut matching_docs = docs
-        .iter()
-        .filter(|d| d.visible_name == "Logo" && d.doc_type == "DocumentType");
-
-    match (matching_docs.next(), matching_docs.next()) {
-        (Some(logo), None) => Ok(logo),
-        (None, None) => Err(anyhow!("Missing 'Logo' notebook in site root")),
-        (Some(_), Some(_)) => Err(anyhow!("Multiple 'Logo' notebooks in site root")),
-        (None, Some(_)) => panic!("Impossible!"),
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Manifest {
-    index: Uuid,
-    logo: Uuid,
-    posts: Posts,
-}
-
-impl Manifest {
-    fn build(root_folder: String, docs: Documents) -> Result<Self> {
-        let site_root = if let Ok(id) = Uuid::parse_str(&root_folder) {
-            let root_doc = docs.get(&id).ok_or(anyhow!("No document with ID {}", id))?;
-
-            if root_doc.doc_type != "CollectionType" {
-                return Err(anyhow!("Site root must be a folder: {}", root_doc.doc_type));
-            }
-
-            root_doc.clone()
-        } else {
-            let root_nodes = docs.children(Parent::Root);
-            let mut site_roots: Vec<_> = root_nodes
-                .iter()
-                .filter(|d| d.doc_type == "CollectionType")
-                .filter(|d| d.visible_name == root_folder)
-                .collect();
-
-            if site_roots.len() != 1 {
-                return Err(anyhow!(
-                "Make sure to have one folder named '{}' on your remarkable. And make sure you are synced with rM cloud, found {} folders",
-                root_folder,
-                site_roots.len()
-            ));
-            }
-
-            site_roots.pop().unwrap().clone()
-        };
-
-        let site_root_docs = docs.children(Parent::Node(site_root.id));
-        let index = find_index_nb(&site_root_docs)
-            .context("Finding index notebook")?
-            .id;
-        let logo = find_logo_nb(&site_root_docs)
-            .context("Finding logo notebook")?
-            .id;
-        let posts = find_posts(&site_root_docs, &docs).context("Finding Posts")?;
-
-        Ok(Manifest { index, logo, posts })
-    }
-
-    fn load(material_root: &Path) -> Result<Self> {
-        let manifest_file = std::fs::File::open(&material_root.join("manifest.json"))
-            .context("Opening material manifest file")?;
-        let manifest = serde_json::from_reader(manifest_file).context("Parsing manifest file")?;
-        Ok(manifest)
-    }
-
-    fn save(&self, material_root: &Path) -> Result<()> {
-        let manifest_file = std::fs::File::create(&material_root.join("manifest.json"))
-            .context("Creating manifest file")?;
-        serde_json::to_writer_pretty(manifest_file, &self).context("Writing manifest file")?;
-        Ok(())
-    }
-
-    fn doc_ids(&self) -> Vec<Uuid> {
-        std::iter::once(self.index)
-            .chain(std::iter::once(self.logo))
-            .chain(self.posts.doc_ids())
-            .collect()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Posts {
-    documents: BTreeMap<String, Uuid>,
-    folders: BTreeMap<String, Posts>,
-}
-
-impl Posts {
-    fn doc_ids(&self) -> Vec<Uuid> {
-        self.documents
-            .values()
-            .copied()
-            .chain(self.folders.values().flat_map(|f| f.doc_ids()))
-            .collect()
-    }
-}
-
-fn find_posts<'a>(root_docs: &[&'a Document], all_docs: &'a Documents) -> Result<Posts> {
-    let mut matching_docs = root_docs
-        .iter()
-        .filter(|d| d.visible_name == "Posts" && d.doc_type == "CollectionType");
-
-    let posts_folder = match (matching_docs.next(), matching_docs.next()) {
-        (Some(posts_folder), None) => posts_folder,
-        (None, None) => return Err(anyhow!("Missing 'Posts' folder in site root")),
-        (Some(_), Some(_)) => return Err(anyhow!("Multiple 'Posts' folders in site root")),
-        (None, Some(_)) => panic!("Impossible!"),
-    };
-    let posts = build_posts_hierarchy(posts_folder.id, all_docs);
-    println!("{:#?}", posts);
-    Ok(posts)
-}
-
-fn build_posts_hierarchy(folder: Uuid, all_docs: &Documents) -> Posts {
-    let items = all_docs.children(Parent::Node(folder));
-    let documents = items
-        .iter()
-        .filter(|d| d.doc_type == "DocumentType")
-        .map(|d| (d.visible_name.clone(), d.id))
-        .collect();
-    let folders = items
-        .iter()
-        .filter(|d| d.doc_type == "CollectionType")
-        .map(|d| {
-            (
-                d.visible_name.clone(),
-                build_posts_hierarchy(d.id, all_docs),
-            )
-        })
-        .collect();
-    Posts { documents, folders }
 }
 
 async fn fetch(config: SiteConfig, client: Client, output_path: &Path) -> Result<()> {
