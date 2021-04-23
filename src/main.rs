@@ -1,8 +1,8 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use remarkable_cloud_api::{reqwest, Client, ClientState};
+use anyhow::{anyhow, Context, Result};
+use remarkable_cloud_api::{reqwest, Client, ClientState, Parent, Uuid};
 use structopt::StructOpt;
 
 mod config;
@@ -25,6 +25,10 @@ struct Opt {
 #[derive(Debug, StructOpt)]
 #[structopt(about = "First fetch the raw site material from rM cloud, then generate the site")]
 enum Action {
+    Init {
+        device_token: String,
+        folder: String,
+    },
     Fetch {
         device_token: String,
         #[structopt(parse(from_os_str))]
@@ -36,6 +40,79 @@ enum Action {
         #[structopt(parse(from_os_str))]
         build_path: PathBuf,
     },
+}
+
+async fn init(client: Client, folder_name: String, config_path: PathBuf) -> Result<()> {
+    if let Some(config_parent) = config_path.parent() {
+        std::fs::create_dir_all(&config_parent).context("Ensuring config path parent exists")?;
+    }
+    let docs = client
+        .all_documents(false)
+        .await
+        .context("Fetching all document metadata from rM Cloud")?;
+
+    let folders_with_given_name = docs
+        .children(Parent::Root)
+        .into_iter()
+        .filter(|d| d.visible_name == folder_name && d.doc_type == "CollectionType")
+        .count();
+
+    if folders_with_given_name > 0 {
+        return Err(anyhow!(
+            "Choose a unique folder name:  {} folder(s) with the name '{}'",
+            folders_with_given_name,
+            folder_name
+        ));
+    }
+    println!("Creating folder on remarkable {:?}", folder_name);
+    let folder_id = client
+        .create_folder(Uuid::new_v4(), folder_name.clone(), Parent::Root)
+        .await
+        .context("Creating site folder on remarkable")?;
+
+    println!("Created folder {:?}", folder_id);
+
+    println!("Creating Posts folder {:?}/Posts", folder_name);
+    let posts_folder_id = client
+        .create_folder(Uuid::new_v4(), "Posts".to_string(), Parent::Node(folder_id))
+        .await
+        .context("Creating Posts folder on remarkable")?;
+    println!("Created Posts folder {:?}", posts_folder_id);
+
+    println!("Uploading Home starter {:?}/Home", folder_name);
+    let starter_path = Path::new("starter");
+    let home_zip_file =
+        std::fs::File::open(starter_path.join("Home.zip")).context("Opening Home zip file")?;
+    let mut zip = zip::ZipArchive::new(home_zip_file).context("Reading Home ZipArchive")?;
+
+    client
+        .upload_notebook(
+            Uuid::new_v4(),
+            "Home".to_string(),
+            Parent::Node(folder_id),
+            &mut zip,
+        )
+        .await
+        .context("Creating Home notebook on remarkable")?;
+    println!("Created Home notebook {:?}", posts_folder_id);
+
+    println!("Uploading Logo starter {:?}/Logo", folder_name);
+    let logo_zip_file =
+        std::fs::File::open(starter_path.join("Logo.zip")).context("Opening Logo zip file")?;
+    let mut zip = zip::ZipArchive::new(logo_zip_file).context("Reading Logo ZipArchive")?;
+
+    client
+        .upload_notebook(
+            Uuid::new_v4(),
+            "Logo".to_string(),
+            Parent::Node(folder_id),
+            &mut zip,
+        )
+        .await
+        .context("Creating Logo notebook on remarkable")?;
+    println!("Created Logo folder {:?}", posts_folder_id);
+
+    Ok(())
 }
 
 async fn fetch(config: Config, client: Client, output_path: &Path) -> Result<()> {
@@ -72,30 +149,50 @@ async fn fetch(config: Config, client: Client, output_path: &Path) -> Result<()>
     Ok(())
 }
 
+async fn build_rm_client(device_token: String) -> Result<Client> {
+    let mut client = Client::new(
+        ClientState {
+            device_token,
+            ..Default::default()
+        },
+        reqwest::Client::builder()
+            .user_agent("marker-network-site-generator-cli")
+            .build()
+            .context("Building reqwest client")?,
+    );
+
+    client
+        .refresh_state()
+        .await
+        .context("Refreshing rM Cloud auth tokens")?;
+
+    Ok(client)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let opt = Opt::from_args();
-    let config = Config::load(&opt.config_path).context("Loading site config")?;
 
     match opt.action {
+        Action::Init {
+            device_token,
+            folder,
+        } => {
+            let client = build_rm_client(device_token)
+                .await
+                .context("Building rM Client")?;
+            init(client, folder, opt.config_path)
+                .await
+                .context("Initializing site")?;
+        }
         Action::Fetch {
             device_token,
             material_path,
         } => {
-            let mut client = Client::new(
-                ClientState {
-                    device_token,
-                    ..Default::default()
-                },
-                reqwest::Client::builder()
-                    .user_agent("rm-site-gen")
-                    .build()
-                    .context("Building reqwest client")?,
-            );
-            client
-                .refresh_state()
+            let config = Config::load(&opt.config_path).context("Loading site config")?;
+            let client = build_rm_client(device_token)
                 .await
-                .context("Refreshing rM Cloud auth tokens")?;
+                .context("Building rM Client")?;
             fetch(config, client, &material_path)
                 .await
                 .context("Fetching site data")?;
@@ -104,6 +201,7 @@ async fn main() -> Result<()> {
             material_path,
             build_path,
         } => {
+            let config = Config::load(&opt.config_path).context("Loading site config")?;
             let generator = Generator::prepare(config, material_path, build_path)
                 .context("Preparing to generate site")?;
 
