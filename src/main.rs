@@ -22,6 +22,19 @@ struct SiteConfig {
     theme: String,
 }
 
+impl SiteConfig {
+    fn load(path: &Path) -> Result<Self> {
+        let file = std::fs::File::open(path).context("Opening config file")?;
+        let config = serde_json::from_reader(file).context("Parsing config file")?;
+        Ok(config)
+    }
+
+    fn theme(&self) -> Result<Theme> {
+        let theme_dir = PathBuf::from("themes").join(&self.theme);
+        Theme::load(&theme_dir)
+    }
+}
+
 #[derive(Debug)]
 struct Theme {
     handlebars: Handlebars<'static>,
@@ -76,19 +89,6 @@ impl Theme {
         std::fs::copy(&self.css, &gen_root.join("style.css"))
             .context("Copying theme css into generated site")?;
         Ok(())
-    }
-}
-
-impl SiteConfig {
-    fn load(path: &Path) -> Result<Self> {
-        let file = std::fs::File::open(path).context("Opening config file")?;
-        let config = serde_json::from_reader(file).context("Parsing config file")?;
-        Ok(config)
-    }
-
-    fn theme(&self) -> Result<Theme> {
-        let theme_dir = PathBuf::from("themes").join(&self.theme);
-        Theme::load(&theme_dir)
     }
 }
 
@@ -161,7 +161,7 @@ fn render_all_svgs(
 
     doc_svgs.insert(
         manifest.index,
-        render_zip(
+        render_notebook_zip(
             manifest.index,
             &zip_dir.join(format!("{}.zip", manifest.index)),
             &site_root,
@@ -172,7 +172,7 @@ fn render_all_svgs(
 
     doc_svgs.insert(
         manifest.logo,
-        render_zip(
+        render_notebook_zip(
             manifest.logo,
             &zip_dir.join(format!("{}.zip", manifest.logo)),
             &site_root,
@@ -189,7 +189,7 @@ fn render_all_svgs(
             .map(|doc_id| {
                 Ok((
                     *doc_id,
-                    render_zip(
+                    render_notebook_zip(
                         *doc_id,
                         &zip_dir.join(format!("{}.zip", doc_id)),
                         &site_root,
@@ -205,7 +205,7 @@ fn render_all_svgs(
     Ok(doc_svgs)
 }
 
-fn render_zip(
+fn render_notebook_zip(
     id: Uuid,
     zip_path: &Path,
     site_root: &Path,
