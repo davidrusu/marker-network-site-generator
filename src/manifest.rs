@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
-use remarkable_cloud_api::{Document, Documents, Parent, Uuid};
+use remarkable_cloud_api::{Documents, Parent, Uuid};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,12 +41,11 @@ impl Manifest {
             site_roots.pop().unwrap().clone()
         };
 
-        let site_root_docs = docs.children(Parent::Node(site_root.id));
         let index = Self::root_doc_by_name("Index", site_root.id, &docs)
             .context("Looking for 'Index' notebook")?;
         let logo = Self::root_doc_by_name("Logo", site_root.id, &docs)
             .context("Looking for 'Logo' notebook")?;
-        let posts = Posts::build(&site_root_docs, &docs).context("Looking for 'Posts' folder")?;
+        let posts = Posts::build(site_root.id, &docs).context("Looking for 'Posts' folder")?;
 
         Ok(Manifest { index, logo, posts })
     }
@@ -102,11 +101,10 @@ impl Posts {
             .collect()
     }
 
-    fn build<'a>(root_docs: &[&'a Document], all_docs: &'a Documents) -> Result<Posts> {
-        // TODO: pass root_id instead of root_docs
-
-        let mut matching_docs = root_docs
-            .iter()
+    fn build<'a>(root_id: Uuid, docs: &Documents) -> Result<Posts> {
+        let mut matching_docs = docs
+            .children(Parent::Node(root_id))
+            .into_iter()
             .filter(|d| d.visible_name == "Posts" && d.doc_type == "CollectionType");
 
         let posts_folder = match (matching_docs.next(), matching_docs.next()) {
@@ -115,8 +113,8 @@ impl Posts {
             (Some(_), Some(_)) => return Err(anyhow!("Multiple 'Posts' folders in site root")),
             (None, Some(_)) => panic!("Impossible!"),
         };
-        let posts = Self::build_posts_hierarchy(posts_folder.id, all_docs);
-        println!("{:#?}", posts);
+
+        let posts = Self::build_posts_hierarchy(posts_folder.id, docs);
         Ok(posts)
     }
 
