@@ -112,6 +112,15 @@ async fn init(client: Client, folder_name: String, config_path: PathBuf) -> Resu
         .context("Creating Logo notebook on remarkable")?;
     println!("Created Logo folder {:?}", posts_folder_id);
 
+    let config = Config {
+        site_root: folder_id.to_string(),
+        title: folder_name,
+        theme: "marker".to_string(),
+    };
+
+    println!("Saving config file");
+    config.save(&config_path).context("Saving config")?;
+
     Ok(())
 }
 

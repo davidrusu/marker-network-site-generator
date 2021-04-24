@@ -19,6 +19,16 @@ impl Config {
         Ok(config)
     }
 
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let temp_path = path.with_extension("json.tmp");
+        let config_file = std::fs::File::create(&temp_path).context("Creating manifest file")?;
+
+        serde_json::to_writer_pretty(&config_file, self).context("Parsing config file")?;
+
+        std::fs::rename(temp_path, path).context("Renaming tempfile to config file")?;
+        Ok(())
+    }
+
     pub fn theme(&self) -> Result<Theme> {
         let theme_dir = PathBuf::from("themes").join(&self.theme);
         Theme::load(&theme_dir)
