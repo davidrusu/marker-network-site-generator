@@ -17,18 +17,18 @@ pub struct Generator {
     manifest: Manifest,
     theme: Theme,
     svgs: BTreeMap<Uuid, Vec<PathBuf>>, // Rendered notebook pages
+    build_nonce: String,
 }
 
 impl Generator {
     pub fn prepare(config: Config, material_path: PathBuf, root: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&root).context("creating the generated site directory")?;
+
         let manifest = Manifest::load(&material_path).context("Loading manifest")?;
         println!("Loaded manifest {:#?}", manifest);
 
-        std::fs::create_dir_all(&root).context("creating the generated site directory")?;
-
-        let svgs = render_all_svgs(&manifest, &material_path, &root).context("Rendering svg's")?;
-
         let theme = config.theme().context("Loading theme from config")?;
+        let svgs = render_all_svgs(&manifest, &material_path, &root).context("Rendering svg's")?;
 
         Ok(Self {
             root,
@@ -36,6 +36,7 @@ impl Generator {
             manifest,
             theme,
             svgs,
+            build_nonce: chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string(),
         })
     }
 
@@ -93,6 +94,7 @@ impl Generator {
         self.theme
             .render_index(
                 &json!({
+                    "build_nonce": self.build_nonce,
                     "title": self.title(),
                     "logo": self.logo_svg(),
                     "name": "Home",
@@ -130,6 +132,7 @@ impl Generator {
         self.theme
             .render_document(
                 &json!({
+                    "build_nonce": self.build_nonce,
                     "title": self.title(),
                     "name": name,
                     "breadcrumbs": breadcrumbs
@@ -189,6 +192,7 @@ impl Generator {
         self.theme
             .render_folder(
                 &json!({
+                    "build_nonce": self.build_nonce,
                     "title": self.title(),
                     "name": folder,
                     "logo": self.logo_svg(),

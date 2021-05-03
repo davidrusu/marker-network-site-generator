@@ -29,15 +29,14 @@
            {{#each documents}}
 	   <a class="nav document-link" href="{{link}}">
 	      <div class="document-link-name">{{name}}</div>
-	      <img class="nb-page-svg thumbnail" src="{{svg}}" />
+	      <img class="nb-page-svg thumbnail" src="{{svg}}?{{../build_nonce}}" />
 	   </a>
 	   {{/each}}
 	 </div>
       </div>
       <div class="nb-pages">
         {{#each pages}}
-        <img class="nb-page-svg" src="{{this}}" />
-	<div class="nb-page-divider"></div>
+        <img class="nb-page-svg" src="{{this}}?{{../build_nonce}}" />
         {{/each}}
       </div>
     </div>
