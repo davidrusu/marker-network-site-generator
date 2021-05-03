@@ -5,10 +5,17 @@ use anyhow::{anyhow, Context, Result};
 use remarkable_cloud_api::{Documents, Parent, Uuid};
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentMeta {
+    pub id: Uuid,
+    pub name: String,
+    pub modified_client: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
-    pub home: Uuid,
-    pub logo: Uuid,
+    pub home: DocumentMeta,
+    pub logo: DocumentMeta,
     pub posts: Posts,
 }
 
@@ -66,21 +73,25 @@ impl Manifest {
         Ok(())
     }
 
-    pub fn doc_ids(&self) -> Vec<Uuid> {
-        std::iter::once(self.home)
-            .chain(std::iter::once(self.logo))
-            .chain(self.posts.doc_ids())
+    pub fn docs(&self) -> Vec<&DocumentMeta> {
+        std::iter::once(&self.home)
+            .chain(std::iter::once(&self.logo))
+            .chain(self.posts.docs())
             .collect()
     }
 
-    fn root_doc_by_name(doc_name: &str, root_id: Uuid, docs: &Documents) -> Result<Uuid> {
+    fn root_doc_by_name(doc_name: &str, root_id: Uuid, docs: &Documents) -> Result<DocumentMeta> {
         let mut matching_docs = docs
             .children(Parent::Node(root_id))
             .into_iter()
             .filter(|d| d.visible_name == doc_name && d.doc_type == "DocumentType");
 
         match (matching_docs.next(), matching_docs.next()) {
-            (Some(doc), None) => Ok(doc.id),
+            (Some(d), None) => Ok(DocumentMeta {
+                id: d.id,
+                name: d.visible_name.clone(),
+                modified_client: d.modified_client,
+            }),
             (None, None) => Err(anyhow!("Missing '{}' notebook in site root", doc_name)),
             (Some(_), Some(_)) => Err(anyhow!("Multiple '{}' notebooks in site root", doc_name)),
             (None, Some(_)) => panic!("Impossible!"),
@@ -90,16 +101,15 @@ impl Manifest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Posts {
-    pub documents: BTreeMap<String, Uuid>,
+    pub documents: BTreeMap<String, DocumentMeta>,
     pub folders: BTreeMap<String, Posts>,
 }
 
 impl Posts {
-    pub fn doc_ids(&self) -> Vec<Uuid> {
+    pub fn docs(&self) -> Vec<&DocumentMeta> {
         self.documents
             .values()
-            .copied()
-            .chain(self.folders.values().flat_map(|f| f.doc_ids()))
+            .chain(self.folders.values().flat_map(|f| f.docs()))
             .collect()
     }
 
@@ -125,8 +135,16 @@ impl Posts {
         let documents = items
             .iter()
             .filter(|d| d.doc_type == "DocumentType")
-            .map(|d| (d.visible_name.clone(), d.id))
+            .map(|d| {
+                let doc_meta = DocumentMeta {
+                    id: d.id,
+                    name: d.visible_name.clone(),
+                    modified_client: d.modified_client,
+                };
+                (doc_meta.name.clone(), doc_meta)
+            })
             .collect();
+
         let folders = items
             .iter()
             .filter(|d| d.doc_type == "CollectionType")

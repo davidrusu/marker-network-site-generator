@@ -89,6 +89,8 @@ a {
   padding-top: 80px;
   flex-grow: 1;
   overflow-y: scroll;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .nb-page-svg {

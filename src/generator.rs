@@ -24,9 +24,7 @@ impl Generator {
         let manifest = Manifest::load(&material_path).context("Loading manifest")?;
         println!("Loaded manifest {:#?}", manifest);
 
-        let svg_root = root.join("svg");
         std::fs::create_dir_all(&root).context("creating the generated site directory")?;
-        std::fs::create_dir_all(&svg_root).context("creating the generated site svg directory")?;
 
         let svgs = render_all_svgs(&manifest, &material_path, &root).context("Rendering svg's")?;
 
@@ -46,11 +44,11 @@ impl Generator {
     }
 
     fn logo_svg(&self) -> &Path {
-        self.doc_first_page(self.manifest.logo)
+        self.doc_first_page(self.manifest.logo.id)
     }
 
     fn home_pages(&self) -> &[PathBuf] {
-        self.doc_pages(self.manifest.home)
+        self.doc_pages(self.manifest.home.id)
     }
 
     fn doc_first_page(&self, id: Uuid) -> &Path {
@@ -78,11 +76,11 @@ impl Generator {
             .context("Creating posts directory in generated site root")?;
 
         let breadcrumbs = &[("Home".to_string(), PathBuf::from("/index.html"))];
-        for (doc_name, doc_id) in self.manifest.posts.documents.iter() {
+        for doc in self.manifest.posts.documents.values() {
             let doc_path = self
-                .gen_doc(breadcrumbs, &posts_path, doc_name, *doc_id)
+                .gen_doc(breadcrumbs, &posts_path, &doc.name, doc.id)
                 .context("Generating a top level document")?;
-            docs.push((doc_name.to_string(), *doc_id, doc_path));
+            docs.push((doc.name.clone(), doc.id, doc_path));
         }
 
         for (sub_folder_name, sub_folder_posts) in self.manifest.posts.folders.iter() {
@@ -169,11 +167,11 @@ impl Generator {
 
         let mut breadcrumbs_for_children = breadcrumbs.to_vec();
         breadcrumbs_for_children.push((folder.to_string(), folder_link.clone()));
-        for (doc_name, doc_id) in posts.documents.iter() {
+        for doc in posts.documents.values() {
             let doc_path = self
-                .gen_doc(&breadcrumbs_for_children, &folder_path, doc_name, *doc_id)
+                .gen_doc(&breadcrumbs_for_children, &folder_path, &doc.name, doc.id)
                 .context("Generating a doc inside a folder")?;
-            docs.push((doc_name.to_string(), *doc_id, doc_path));
+            docs.push((doc.name.clone(), doc.id, doc_path));
         }
 
         for (sub_folder_name, sub_folder_posts) in posts.folders.iter() {
@@ -227,10 +225,10 @@ fn render_all_svgs(
     let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
 
     doc_svgs.insert(
-        manifest.home,
+        manifest.home.id,
         render_notebook_zip(
-            manifest.home,
-            &zip_dir.join(format!("{}.zip", manifest.home)),
+            manifest.home.id,
+            &zip_dir.join(format!("{}.zip", manifest.home.id)),
             &site_root,
             false,
         )
@@ -238,10 +236,10 @@ fn render_all_svgs(
     );
 
     doc_svgs.insert(
-        manifest.logo,
+        manifest.logo.id,
         render_notebook_zip(
-            manifest.logo,
-            &zip_dir.join(format!("{}.zip", manifest.logo)),
+            manifest.logo.id,
+            &zip_dir.join(format!("{}.zip", manifest.logo.id)),
             &site_root,
             true,
         )
@@ -251,14 +249,14 @@ fn render_all_svgs(
     doc_svgs.extend(
         manifest
             .posts
-            .doc_ids()
+            .docs()
             .par_iter()
-            .map(|doc_id| {
+            .map(|doc| {
                 Ok((
-                    *doc_id,
+                    doc.id,
                     render_notebook_zip(
-                        *doc_id,
-                        &zip_dir.join(format!("{}.zip", doc_id)),
+                        doc.id,
+                        &zip_dir.join(format!("{}.zip", doc.id)),
                         &site_root,
                         false,
                     )
@@ -278,7 +276,9 @@ fn render_notebook_zip(
     site_root: &Path,
     auto_crop: bool,
 ) -> Result<Vec<PathBuf>> {
-    let svg_root = site_root.join("svg");
+    let notebook_root = site_root.join("svg").join(format!("{}", id));
+    std::fs::create_dir_all(&notebook_root).context("Creating notebook svg directory")?;
+
     let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
     let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
     let mut rendered_svgs = Vec::new();
@@ -295,7 +295,7 @@ fn render_notebook_zip(
                 .trim_end_matches(".rm");
             println!("Rendering {} p{} svg", id, page_number);
 
-            let output_path = svg_root.join(format!("{}-{}.svg", id, page_number));
+            let output_path = notebook_root.join(format!("{}.svg", page_number));
             let mut output =
                 std::fs::File::create(&output_path).context("Creating output file for svg")?;
             let debug = false;

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -110,7 +111,23 @@ async fn init(client: Client, folder_name: String, config_path: PathBuf) -> Resu
         )
         .await
         .context("Creating Logo notebook on remarkable")?;
-    println!("Created Logo folder {:?}", posts_folder_id);
+    println!("Created Logo notebook {:?}", posts_folder_id);
+
+    println!("Uploading Sarmale starter {:?}/Posts/Sarmale", folder_name);
+    let sarmale_zip_file = std::fs::File::open(starter_path.join("Posts").join("Sarmale.zip"))
+        .context("Opening Sarmale zip file")?;
+    let mut zip = zip::ZipArchive::new(sarmale_zip_file).context("Reading Sarmale ZipArchive")?;
+
+    client
+        .upload_notebook(
+            Uuid::new_v4(),
+            "Sarmale (Cabbage Rolls)".to_string(),
+            Parent::Node(posts_folder_id),
+            &mut zip,
+        )
+        .await
+        .context("Creating Sarmale notebook on remarkable")?;
+    println!("Created Sarmale notebook {:?}", posts_folder_id);
 
     let config = Config {
         site_root: folder_id.to_string(),
@@ -135,25 +152,43 @@ async fn fetch(config: Config, client: Client, output_path: &Path) -> Result<()>
         .await
         .context("Fetching all document metadata from rM Cloud")?;
 
+    let existing_docs: BTreeMap<Uuid, manifest::DocumentMeta> =
+        if let Ok(existing_manifest) = Manifest::load(&output_path).context("Loading manifest") {
+            existing_manifest
+                .docs()
+                .into_iter()
+                .map(|d| (d.id, d.clone()))
+                .collect()
+        } else {
+            Default::default()
+        };
+
     let manifest =
         Manifest::build(config.site_root, documents).context("Building Manifest from documents")?;
 
-    manifest
-        .save(&output_path)
-        .context("Saving the generated Manifest")?;
+    for doc in manifest.docs() {
+        if let Some(existing_doc) = existing_docs.get(&doc.id) {
+            if existing_doc.modified_client >= doc.modified_client {
+                println!("Nothing new from {}", doc.id);
+                continue;
+            }
+        }
+        println!("Downloading {}", doc.id);
 
-    for doc_id in manifest.doc_ids() {
-        println!("Downloading {}", doc_id);
         let zip = client
-            .download_zip(doc_id)
+            .download_zip(doc.id)
             .await
             .context("Downloading document zip")?;
         let bytes = zip.into_inner().into_inner();
-        let mut file = std::fs::File::create(&archives_dir.join(format!("{}.zip", doc_id)))
+        let mut file = std::fs::File::create(&archives_dir.join(format!("{}.zip", doc.id)))
             .context("Creating file for document zip")?;
         file.write_all(&bytes)
             .context("Writing document zip to disk")?;
     }
+
+    manifest
+        .save(&output_path)
+        .context("Saving the generated Manifest")?;
 
     Ok(())
 }

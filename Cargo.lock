@@ -605,6 +605,7 @@ name = "marker-network-site-generator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "handlebars",
  "lines-are-rusty",
  "rayon",
