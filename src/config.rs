@@ -15,7 +15,11 @@ pub struct Config {
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let file = std::fs::File::open(path).context("Opening config file")?;
-        let config = serde_json::from_reader(file).context("Parsing config file")?;
+        Self::from_reader(file)
+    }
+
+    pub fn from_reader<R: std::io::Read>(r: R) -> Result<Self> {
+        let config = serde_json::from_reader(r).context("Parsing config file")?;
         Ok(config)
     }
 
