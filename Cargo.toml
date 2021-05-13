@@ -1,5 +1,5 @@
 [package]
-name = "marker-network-site-generator"
+name = "marker_network_site_generator"
 version = "0.1.0"
 authors = ["David Rusu <davidrusu.me@gmail.com>"]
 edition = "2018"

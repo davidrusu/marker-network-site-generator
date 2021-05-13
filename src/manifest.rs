@@ -62,7 +62,11 @@ impl Manifest {
     pub fn load(material_root: &Path) -> Result<Self> {
         let manifest_file = std::fs::File::open(&material_root.join("manifest.json"))
             .context("Opening material manifest file")?;
-        let manifest = serde_json::from_reader(manifest_file).context("Parsing manifest file")?;
+        Self::from_reader(manifest_file)
+    }
+
+    pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self> {
+        let manifest = serde_json::from_reader(reader).context("Parsing manifest file")?;
         Ok(manifest)
     }
 
