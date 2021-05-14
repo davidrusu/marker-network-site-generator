@@ -246,8 +246,9 @@ async fn main() -> Result<()> {
             build_path,
         } => {
             let config = Config::load(&opt.config_path).context("Loading site config")?;
-            let generator = Generator::prepare(config, material_path, build_path)
-                .context("Preparing to generate site")?;
+            let generator =
+                Generator::prepare(config, material_path, build_path, PathBuf::from("/"))
+                    .context("Preparing to generate site")?;
 
             generator.gen_index().context("Generating site")?;
         }

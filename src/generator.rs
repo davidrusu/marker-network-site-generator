@@ -13,6 +13,7 @@ use crate::theme::Theme;
 
 pub struct Generator {
     root: PathBuf,
+    prefix: PathBuf,
     config: Config,
     manifest: Manifest,
     theme: Theme,
@@ -21,23 +22,30 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn prepare(config: Config, material_path: PathBuf, root: PathBuf) -> Result<Self> {
+    pub fn prepare(
+        config: Config,
+        material_path: PathBuf,
+        root: PathBuf,
+        prefix: PathBuf,
+    ) -> Result<Self> {
         std::fs::create_dir_all(&root).context("creating the generated site directory")?;
 
         let manifest = Manifest::load(&material_path).context("Loading manifest")?;
         println!("Loaded manifest {:#?}", manifest);
 
         let theme = config.theme().context("Loading theme from config")?;
-        let svgs = render_all_svgs(&manifest, &material_path, &root).context("Rendering svg's")?;
-
-        Ok(Self {
+	let mut gen = Self {
             root,
+            prefix,
             config,
             manifest,
             theme,
-            svgs,
+            svgs: Default::default(),
             build_nonce: chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string(),
-        })
+        };
+        gen.svgs = gen.render_all_svgs(&material_path).context("Rendering svg's")?;
+
+        Ok(gen)
     }
 
     fn title(&self) -> &str {
@@ -62,7 +70,7 @@ impl Generator {
     }
 
     fn relative_to_root(&self, path: &Path) -> Result<PathBuf> {
-        Ok(PathBuf::from("/").join(
+        Ok(self.prefix.join(
             path.strip_prefix(&self.root)
                 .with_context(|| format!("Stripping root from path {:?}", path))?,
         ))
@@ -217,113 +225,110 @@ impl Generator {
 
         Ok(folder_link)
     }
-}
 
-fn render_all_svgs(
-    manifest: &Manifest,
-    material_root: &Path,
-    site_root: &Path,
-) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
-    let zip_dir = material_root.join("zip");
+    fn render_all_svgs(
+	&self,
+        material_root: &Path,
+    ) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
+        let zip_dir = material_root.join("zip");
 
-    let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
+        let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
 
-    doc_svgs.insert(
-        manifest.home.id,
-        render_notebook_zip(
-            manifest.home.id,
-            &zip_dir.join(format!("{}.zip", manifest.home.id)),
-            &site_root,
-            false,
-        )
-        .context("Rendering index svg")?,
-    );
-
-    doc_svgs.insert(
-        manifest.logo.id,
-        render_notebook_zip(
-            manifest.logo.id,
-            &zip_dir.join(format!("{}.zip", manifest.logo.id)),
-            &site_root,
-            true,
-        )
-        .context("Rendering logo svg")?,
-    );
-
-    doc_svgs.extend(
-        manifest
-            .posts
-            .docs()
-            .par_iter()
-            .map(|doc| {
-                Ok((
-                    doc.id,
-                    render_notebook_zip(
-                        doc.id,
-                        &zip_dir.join(format!("{}.zip", doc.id)),
-                        &site_root,
-                        false,
-                    )
-                    .context("Rendering document svg")?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()
-            .context("Rendering at least one document")?,
-    );
-
-    Ok(doc_svgs)
-}
-
-fn render_notebook_zip(
-    id: Uuid,
-    zip_path: &Path,
-    site_root: &Path,
-    auto_crop: bool,
-) -> Result<Vec<PathBuf>> {
-    let notebook_root = site_root.join("svg").join(format!("{}", id));
-    std::fs::create_dir_all(&notebook_root).context("Creating notebook svg directory")?;
-
-    let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
-    let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
-    let mut rendered_svgs = Vec::new();
-    for i in 0..zip.len() {
-        let mut file = zip
-            .by_index(i)
-            .context("Attempting to index into the zip files")?;
-        if file.name().ends_with(".rm") {
-            let lines = lines_are_rusty::LinesData::parse(&mut file).context("Parsing .rm file")?;
-            // file name has pattern <uuid>/<page-num>.rm, we just want the page-num.
-            let page_number = file
-                .name()
-                .trim_start_matches(&format!("{}/", id))
-                .trim_end_matches(".rm");
-            println!("Rendering {} p{} svg", id, page_number);
-
-            let output_path = notebook_root.join(format!("{}.svg", page_number));
-            let mut output =
-                std::fs::File::create(&output_path).context("Creating output file for svg")?;
-            let debug = false;
-            lines_are_rusty::render_svg(
-                &mut output,
-                &lines.pages[0],
-                auto_crop,
-                &Default::default(),
-                debug,
+        doc_svgs.insert(
+            self.manifest.home.id,
+            self.render_notebook_zip(
+                self.manifest.home.id,
+                &zip_dir.join(format!("{}.zip", self.manifest.home.id)),
+                false,
             )
-            .context("Rendering document page svg")?;
+            .context("Rendering index svg")?,
+        );
 
-            rendered_svgs.push(
-                PathBuf::from("/").join(
-                    output_path
-                        .strip_prefix(site_root)
-                        .context("Stripping site root form svg paths")?
-                        .to_path_buf(),
-                ),
-            );
-        }
+        doc_svgs.insert(
+            self.manifest.logo.id,
+            self.render_notebook_zip(
+                self.manifest.logo.id,
+                &zip_dir.join(format!("{}.zip", self.manifest.logo.id)),
+                true,
+            )
+            .context("Rendering logo svg")?,
+        );
+
+        doc_svgs.extend(
+            self.manifest
+                .posts
+                .docs()
+                .par_iter()
+                .map(|doc| {
+                    Ok((
+                        doc.id,
+                        self.render_notebook_zip(
+                            doc.id,
+                            &zip_dir.join(format!("{}.zip", doc.id)),
+                            false,
+                        )
+                        .context("Rendering document svg")?,
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()
+                .context("Rendering at least one document")?,
+        );
+
+        Ok(doc_svgs)
     }
 
-    Ok(rendered_svgs)
+    fn render_notebook_zip(
+	&self,
+        id: Uuid,
+        zip_path: &Path,
+        auto_crop: bool,
+    ) -> Result<Vec<PathBuf>> {
+        let notebook_root = self.root.join("svg").join(format!("{}", id));
+        std::fs::create_dir_all(&notebook_root).context("Creating notebook svg directory")?;
+
+        let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
+        let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
+        let mut rendered_svgs = Vec::new();
+        for i in 0..zip.len() {
+            let mut file = zip
+                .by_index(i)
+                .context("Attempting to index into the zip files")?;
+            if file.name().ends_with(".rm") {
+                let lines =
+                    lines_are_rusty::LinesData::parse(&mut file).context("Parsing .rm file")?;
+                // file name has pattern <uuid>/<page-num>.rm, we just want the page-num.
+                let page_number = file
+                    .name()
+                    .trim_start_matches(&format!("{}/", id))
+                    .trim_end_matches(".rm");
+                println!("Rendering {} p{} svg", id, page_number);
+
+                let output_path = notebook_root.join(format!("{}.svg", page_number));
+                let mut output =
+                    std::fs::File::create(&output_path).context("Creating output file for svg")?;
+                let debug = false;
+                lines_are_rusty::render_svg(
+                    &mut output,
+                    &lines.pages[0],
+                    auto_crop,
+                    &Default::default(),
+                    debug,
+                )
+                .context("Rendering document page svg")?;
+
+                rendered_svgs.push(
+                    self.prefix.join(
+                        output_path
+                            .strip_prefix(&self.root)
+                            .context("Stripping site root form svg paths")?
+                            .to_path_buf(),
+                    ),
+                );
+            }
+        }
+
+        Ok(rendered_svgs)
+    }
 }
 
 fn sanitize(name: &str) -> String {
