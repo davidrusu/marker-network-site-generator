@@ -103,6 +103,7 @@ impl Generator {
             .render_index(
                 &json!({
                     "build_nonce": self.build_nonce,
+		    "prefix": self.prefix,
                     "title": self.title(),
                     "logo": self.logo_svg(),
                     "name": "Home",
@@ -141,6 +142,7 @@ impl Generator {
             .render_document(
                 &json!({
                     "build_nonce": self.build_nonce,
+		    "prefix": self.prefix,
                     "title": self.title(),
                     "name": name,
                     "breadcrumbs": breadcrumbs
@@ -201,6 +203,7 @@ impl Generator {
             .render_folder(
                 &json!({
                     "build_nonce": self.build_nonce,
+		    "prefix": self.prefix,
                     "title": self.title(),
                     "name": folder,
                     "logo": self.logo_svg(),
