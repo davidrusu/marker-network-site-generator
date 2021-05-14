@@ -1,11 +1,15 @@
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="{{prefix}}style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{prefix}}style.css?{{build_nonce}}"
+    />
   </head>
   <body>
     <div class="header">
-      <img class="logo" src="{{logo}}" />
+      <img class="logo" src="{{logo}}?{{build_nonce}}" />
       <div class="title-and-breadcrumbs">
         <div class="site-title">{{title}}</div>
         <div class="breadcrumbs">
@@ -31,7 +35,10 @@
         {{#each documents}}
         <a class="document-link" href="{{link}}">
           <div class="document-link-name">{{name}}</div>
-          <img class="nb-page-svg gallery-thumbnail" src="{{svg}}?{{../build_nonce}}" />
+          <img
+            class="nb-page-svg gallery-thumbnail"
+            src="{{svg}}?{{../build_nonce}}"
+          />
         </a>
         {{/each}}
       </div>

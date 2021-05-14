@@ -1,11 +1,16 @@
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="{{prefix}}style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{prefix}}style.css?{{build_nonce}}"
+    />
   </head>
+
   <body>
     <div class="header">
-      <img class="logo" src="{{logo}}" />
+      <img class="logo" src="{{logo}}?{{build_nonce}}" />
       <div class="title-and-breadcrumbs">
         <div class="site-title">{{title}}</div>
         <div class="breadcrumbs">
