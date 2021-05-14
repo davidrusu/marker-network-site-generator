@@ -34,7 +34,7 @@ impl Generator {
         println!("Loaded manifest {:#?}", manifest);
 
         let theme = config.theme().context("Loading theme from config")?;
-	let mut gen = Self {
+        let mut gen = Self {
             root,
             prefix,
             config,
@@ -43,7 +43,9 @@ impl Generator {
             svgs: Default::default(),
             build_nonce: chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string(),
         };
-        gen.svgs = gen.render_all_svgs(&material_path).context("Rendering svg's")?;
+        gen.svgs = gen
+            .render_all_svgs(&material_path)
+            .context("Rendering svg's")?;
 
         Ok(gen)
     }
@@ -84,7 +86,8 @@ impl Generator {
         std::fs::create_dir_all(&posts_path)
             .context("Creating posts directory in generated site root")?;
 
-        let breadcrumbs = &[("Home".to_string(), PathBuf::from("/index.html"))];
+        let breadcrumbs = &[("Home".to_string(), self.prefix.clone())];
+
         for doc in self.manifest.posts.documents.values() {
             let doc_path = self
                 .gen_doc(breadcrumbs, &posts_path, &doc.name, doc.id)
@@ -103,7 +106,7 @@ impl Generator {
             .render_index(
                 &json!({
                     "build_nonce": self.build_nonce,
-		    "prefix": self.prefix,
+                    "prefix": self.prefix,
                     "title": self.title(),
                     "logo": self.logo_svg(),
                     "name": "Home",
@@ -142,7 +145,7 @@ impl Generator {
             .render_document(
                 &json!({
                     "build_nonce": self.build_nonce,
-		    "prefix": self.prefix,
+                    "prefix": self.prefix,
                     "title": self.title(),
                     "name": name,
                     "breadcrumbs": breadcrumbs
@@ -202,25 +205,25 @@ impl Generator {
         self.theme
             .render_folder(
                 &json!({
-                    "build_nonce": self.build_nonce,
-		    "prefix": self.prefix,
-                    "title": self.title(),
-                    "name": folder,
-                    "logo": self.logo_svg(),
-                    "breadcrumbs": breadcrumbs
-                        .iter()
-                        .map(|(name, link)| json!({"name": name, "link": link}))
-                        .collect::<Vec<_>>(),
-                    "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                    "documents": docs.into_iter().map(|(name, id, link)| json!({
-                        "name": name,
-                        "svg": self.doc_first_page(id),
-                        "link": link,
-                    })).collect::<Vec<_>>(),
-                    "folders": sub_folders.into_iter().map(|(name, link)| json!({
-                        "name": name,
-                        "link": link,
-                    })).collect::<Vec<_>>(),
+                "build_nonce": self.build_nonce,
+                "prefix": self.prefix,
+                "title": self.title(),
+                "name": folder,
+                "logo": self.logo_svg(),
+                "breadcrumbs": breadcrumbs
+                    .iter()
+                    .map(|(name, link)| json!({"name": name, "link": link}))
+                    .collect::<Vec<_>>(),
+                "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
+                "documents": docs.into_iter().map(|(name, id, link)| json!({
+                    "name": name,
+                    "svg": self.doc_first_page(id),
+                    "link": link,
+                })).collect::<Vec<_>>(),
+                "folders": sub_folders.into_iter().map(|(name, link)| json!({
+                    "name": name,
+                    "link": link,
+                })).collect::<Vec<_>>(),
                 }),
                 &folder_html_path,
             )
@@ -229,10 +232,7 @@ impl Generator {
         Ok(folder_link)
     }
 
-    fn render_all_svgs(
-	&self,
-        material_root: &Path,
-    ) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
+    fn render_all_svgs(&self, material_root: &Path) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
         let zip_dir = material_root.join("zip");
 
         let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
@@ -281,7 +281,7 @@ impl Generator {
     }
 
     fn render_notebook_zip(
-	&self,
+        &self,
         id: Uuid,
         zip_path: &Path,
         auto_crop: bool,
