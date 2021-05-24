@@ -29,11 +29,29 @@
           <a class="folder-link" href="{{back_link}}">&lt;&lt;&lt;</a>
         </div>
       </div>
+
       <div class="nb-pages">
         {{#each pages}}
-        <img class="nb-page-svg" src="{{this}}?{{../build_nonce}}" />
+        <div class="nb-page-container">
+          <img
+            id="{{this}}"
+            class="nb-page-svg"
+            src="{{this}}?{{../build_nonce}}"
+          />
+        </div>
         {{/each}}
       </div>
+      {{#if render_nav_thumbnails}}
+      <div class="nb-pages-nav-thumbnails">
+        {{#each pages}}<a href="#{{this}}"
+          ><img
+            class="nb-page-container-nav-thumbnails"
+            src="{{this}}?{{../build_nonce}}"
+        /></a>
+        <div class="nb-page-divider"></div>
+        {{/each}}
+      </div>
+      {{/if}}
     </div>
   </body>
 </html>

@@ -111,6 +111,7 @@ impl Generator {
                     "logo": self.logo_svg(),
                     "name": "Home",
                     "pages": self.home_pages(),
+                    "render_nav_thumbnails": self.home_pages().len() > 1,
                     "documents": docs.into_iter().map(|(name, id, link)| json!({
                         "name": name,
                         "svg": self.doc_first_page(id),
@@ -155,6 +156,7 @@ impl Generator {
                     "logo": self.logo_svg(),
                     "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
                     "pages": self.doc_pages(id),
+                    "render_nav_thumbnails": self.doc_pages(id).len() > 1,
                 }),
                 &doc_path,
             )

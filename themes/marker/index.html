@@ -31,9 +31,9 @@
         </div>
         <div class="nav group thumbnails">
           {{#each documents}}
-          <a class="nav document-link" href="{{link}}">
+          <a class="nav document-link thumbnail" href="{{link}}">
             <div class="document-link-name">{{name}}</div>
-            <img class="thumbnail" src="{{svg}}?{{../build_nonce}}" />
+            <img src="{{svg}}?{{../build_nonce}}" />
           </a>
           {{/each}}
         </div>
@@ -49,6 +49,7 @@
         </div>
         {{/each}}
       </div>
+      {{#if render_nav_thumbnails}}
       <div class="nb-pages-nav-thumbnails">
         {{#each pages}}<a href="#{{this}}"
           ><img
@@ -58,6 +59,7 @@
         <div class="nb-page-divider"></div>
         {{/each}}
       </div>
+      {{/if}}
     </div>
   </body>
 </html>
