@@ -33,17 +33,29 @@
           {{#each documents}}
           <a class="nav document-link" href="{{link}}">
             <div class="document-link-name">{{name}}</div>
-            <img
-              class="nb-page-svg thumbnail"
-              src="{{svg}}?{{../build_nonce}}"
-            />
+            <img class="thumbnail" src="{{svg}}?{{../build_nonce}}" />
           </a>
           {{/each}}
         </div>
       </div>
       <div class="nb-pages">
         {{#each pages}}
-        <img class="nb-page-svg" src="{{this}}?{{../build_nonce}}" />
+        <div class="nb-page-container">
+          <img
+            id="{{this}}"
+            class="nb-page-svg"
+            src="{{this}}?{{../build_nonce}}"
+          />
+        </div>
+        {{/each}}
+      </div>
+      <div class="nb-pages-nav-thumbnails">
+        {{#each pages}}<a href="#{{this}}"
+          ><img
+            class="nb-page-container-nav-thumbnails"
+            src="{{this}}?{{../build_nonce}}"
+        /></a>
+        <div class="nb-page-divider"></div>
         {{/each}}
       </div>
     </div>

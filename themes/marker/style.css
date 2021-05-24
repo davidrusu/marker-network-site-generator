@@ -7,6 +7,7 @@ html {
 
 body {
   height: 100vh;
+  width: 100vw;
   margin: 0px;
 }
 
@@ -27,9 +28,6 @@ body {
   text-shadow: -1px 1px 0 white, 1px 1px 0 white, 1px -1px 0 white;
 }
 
-.thumbnail {
-  width: 60px;
-}
 .gallery-thumbnail {
   width: 240px;
 }
@@ -37,15 +35,17 @@ body {
 .container {
   display: flex;
   height: 100vh;
+  width: 100vw;
 }
 
 .navbar {
   display: flex;
   flex-direction: column;
   margin-left: 24px;
-  padding-top: 100px;
-  width: 25%;
+  margin-top: 100px;
+  width: 25vw;
   max-width: 250px;
+  overflow-y: scroll;
 }
 
 .nav.group {
@@ -78,6 +78,11 @@ body {
   flex-direction: column;
   align-items: center;
   margin: 6px;
+  width: 80px;
+}
+
+.thumbnail {
+  /* width: 60px; */
 }
 
 a {
@@ -86,15 +91,31 @@ a {
 }
 
 .nb-pages {
-  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
   padding-top: 80px;
+  height: calc(100vh - 80px);
+  flex-grow: 1;
   overflow-y: scroll;
 }
 
 .nb-page-svg {
-  max-width: 100%;
-  max-height: 95%;
+  width: 100%;
 }
+
+.nb-page-container {
+    flex-grow: 1;
+}
+
+.nb-pages-nav-thumbnails {
+    width: 15vw;
+    overflow-y: scroll;
+}
+
+.nb-page-container-nav-thumbnails {
+    width: 100%;
+}
+
 
 .nb-page-divider {
   margin: 0px auto;
@@ -123,20 +144,4 @@ a {
 
 .breadcrumb-seperator {
   margin: 0px 4px;
-}
-
-@media (max-width: 700px) {
-  /* .navbar { */
-  /*   flex-direction: row; */
-  /* } */
-  .navbar {
-    width: unset;
-    max-width: unset;
-  }
-  .container {
-    flex-direction: column;
-  }
-  .nb-pages {
-    padding-top: 0px;
-  }
 }
