@@ -14,7 +14,7 @@ body {
 .header {
   position: fixed;
   display: flex;
-  align-items: start;
+  align-items: flex-start;
   margin-top: 24px;
   margin-left: 24px;
 }
@@ -44,8 +44,9 @@ body {
   margin-left: 24px;
   margin-top: 100px;
   width: 25vw;
+  min-width: 100px;
   max-width: 250px;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 
 .nav.group {
@@ -80,6 +81,14 @@ body {
   margin: 6px;
 }
 
+.document-link-name {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+}
+
 .thumbnail {
   width: 80px;
 }
@@ -95,7 +104,7 @@ a {
   padding-top: 80px;
   height: calc(100vh - 80px);
   flex-grow: 1;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 
 .nb-page-svg {
@@ -113,7 +122,7 @@ a {
     padding-top: 80px;
     width: 10vw;
     min-width: 120px;
-    overflow-y: scroll;
+    overflow-y: auto;
 }
 
 .nb-page-container-nav-thumbnails {
@@ -138,7 +147,7 @@ a {
 .gallery-folders {
   display: flex;
   flex-direction: column;
-  align-items: start;
+  align-items: flex-start;
   flex-wrap: wrap;
 }
 
@@ -153,4 +162,36 @@ a {
 
 .breadcrumb-seperator {
   margin: 0px 4px;
+}
+
+@media screen and (max-width: 550px) {
+    .nb-pages-nav-thumbnails {
+	display: none;
+    }
+
+    .container {
+	flex-direction: column;
+    }
+
+    .navbar {
+	flex-direction: column;
+	align-items: center;
+	width: 100vw;
+	margin-left: unset;
+	min-width: unset;
+	max-width: unset;
+	overflow-y: unset;
+    }
+
+    .nav.group {
+	justify-content: center;
+    }
+
+    .thumbnail {
+	width: 50px;
+    }
+
+    .nb-pages {
+	padding-top: 0px;
+    }
 }
