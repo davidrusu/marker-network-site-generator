@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
+use async_recursion::async_recursion;
 use remarkable_cloud_api::{reqwest, Client, ClientState, Parent, Uuid};
 use structopt::StructOpt;
 
@@ -71,63 +72,7 @@ async fn init(client: Client, folder_name: String, config_path: PathBuf) -> Resu
         .await
         .context("Creating site folder on remarkable")?;
 
-    println!("Created folder {:?}", folder_id);
-
-    println!("Creating Posts folder {:?}/Posts", folder_name);
-    let posts_folder_id = client
-        .create_folder(Uuid::new_v4(), "Posts".to_string(), Parent::Node(folder_id))
-        .await
-        .context("Creating Posts folder on remarkable")?;
-    println!("Created Posts folder {:?}", posts_folder_id);
-
-    println!("Uploading Home starter {:?}/Home", folder_name);
-    let starter_path = Path::new("starter");
-    let home_zip_file =
-        std::fs::File::open(starter_path.join("Home.zip")).context("Opening Home zip file")?;
-    let mut zip = zip::ZipArchive::new(home_zip_file).context("Reading Home ZipArchive")?;
-
-    client
-        .upload_notebook(
-            Uuid::new_v4(),
-            "Home".to_string(),
-            Parent::Node(folder_id),
-            &mut zip,
-        )
-        .await
-        .context("Creating Home notebook on remarkable")?;
-    println!("Created Home notebook {:?}", posts_folder_id);
-
-    println!("Uploading Logo starter {:?}/Logo", folder_name);
-    let logo_zip_file =
-        std::fs::File::open(starter_path.join("Logo.zip")).context("Opening Logo zip file")?;
-    let mut zip = zip::ZipArchive::new(logo_zip_file).context("Reading Logo ZipArchive")?;
-
-    client
-        .upload_notebook(
-            Uuid::new_v4(),
-            "Logo".to_string(),
-            Parent::Node(folder_id),
-            &mut zip,
-        )
-        .await
-        .context("Creating Logo notebook on remarkable")?;
-    println!("Created Logo notebook {:?}", posts_folder_id);
-
-    println!("Uploading Sarmale starter {:?}/Posts/Sarmale", folder_name);
-    let sarmale_zip_file = std::fs::File::open(starter_path.join("Posts").join("Sarmale.zip"))
-        .context("Opening Sarmale zip file")?;
-    let mut zip = zip::ZipArchive::new(sarmale_zip_file).context("Reading Sarmale ZipArchive")?;
-
-    client
-        .upload_notebook(
-            Uuid::new_v4(),
-            "Sarmale (Cabbage Rolls)".to_string(),
-            Parent::Node(posts_folder_id),
-            &mut zip,
-        )
-        .await
-        .context("Creating Sarmale notebook on remarkable")?;
-    println!("Created Sarmale notebook {:?}", posts_folder_id);
+    upload_directory(&client, &Path::new("starter"), folder_id).await?;
 
     let config = Config {
         site_root: folder_id.to_string(),
@@ -138,6 +83,52 @@ async fn init(client: Client, folder_name: String, config_path: PathBuf) -> Resu
     println!("Saving config file");
     config.save(&config_path).context("Saving config")?;
 
+    Ok(())
+}
+
+#[async_recursion]
+async fn upload_directory(client: &Client, dir: &Path, rm_folder_id: Uuid) -> Result<()> {
+    println!("Uploading {:?}", dir);
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            let folder_name = path
+                .file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(String::from)
+                .ok_or_else(|| anyhow!("Couldn't get sub folder file name: {:?}", path))?;
+            let sub_folder_id = client
+                .create_folder(Uuid::new_v4(), folder_name, Parent::Node(rm_folder_id))
+                .await
+                .context("Creating folder on remarkable")?;
+
+            upload_directory(&client, &path, sub_folder_id).await?;
+        } else {
+            assert_eq!(
+                path.extension().and_then(std::ffi::OsStr::to_str),
+                Some("zip")
+            );
+
+            let notebook_name = path
+                .file_stem()
+                .and_then(std::ffi::OsStr::to_str)
+                .map(String::from)
+                .ok_or_else(|| anyhow!("Zip file has no name: {:?}", path))?;
+
+            let zip_file = std::fs::File::open(path).context("Opening notebook zip file")?;
+            let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
+            client
+                .upload_notebook(
+                    Uuid::new_v4(),
+                    notebook_name,
+                    Parent::Node(rm_folder_id),
+                    &mut zip,
+                )
+                .await
+                .context("Creating notebook on remarkable")?;
+        }
+    }
     Ok(())
 }
 
