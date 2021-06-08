@@ -377,6 +377,7 @@ impl Generator {
         auto_crop: bool,
     ) -> Result<Vec<PathBuf>> {
         let notebook_root = self.root.join("svg").join(format!("{}", id));
+        let _ = std::fs::remove_dir_all(&notebook_root);
         std::fs::create_dir_all(&notebook_root).context("Creating notebook svg directory")?;
 
         let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
