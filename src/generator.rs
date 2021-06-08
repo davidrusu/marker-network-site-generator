@@ -5,11 +5,64 @@ use rayon::prelude::*;
 
 use anyhow::{Context, Result};
 use remarkable_cloud_api::Uuid;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::config::Config;
 use crate::manifest::{Manifest, Posts};
 use crate::theme::Theme;
+
+const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderCache {
+    version: String,
+    cache: BTreeMap<Uuid, chrono::DateTime<chrono::Utc>>,
+}
+
+impl Default for RenderCache {
+    fn default() -> Self {
+        Self {
+            version: CRATE_VERSION.to_string(),
+            cache: Default::default(),
+        }
+    }
+}
+
+impl RenderCache {
+    fn get(&self, id: &Uuid) -> Option<&chrono::DateTime<chrono::Utc>> {
+        self.cache.get(id)
+    }
+
+    fn is_current_version(&self) -> bool {
+        self.version == CRATE_VERSION
+    }
+
+    fn load(build_root: &Path) -> Result<Self> {
+        let render_cache_path = &build_root.join("render_cache.json");
+        if render_cache_path.exists() {
+            let render_cache_file =
+                std::fs::File::open(render_cache_path).context("Opening render cache file")?;
+            let render_cache: Self =
+                serde_json::from_reader(render_cache_file).context("Parsing render_cache file")?;
+            if render_cache.is_current_version() {
+                Ok(render_cache)
+            } else {
+                Ok(Self::default())
+            }
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    fn save(&self, build_root: &Path) -> Result<()> {
+        let render_cache_file = std::fs::File::create(&build_root.join("render_cache.json"))
+            .context("Creating render cache file")?;
+        serde_json::to_writer_pretty(render_cache_file, &self)
+            .context("Writing render cache json")?;
+        Ok(())
+    }
+}
 
 pub struct Generator {
     root: PathBuf,
@@ -19,6 +72,7 @@ pub struct Generator {
     theme: Theme,
     svgs: BTreeMap<Uuid, Vec<PathBuf>>, // Rendered notebook pages
     build_nonce: String,
+    render_cache: RenderCache,
 }
 
 impl Generator {
@@ -33,6 +87,8 @@ impl Generator {
         let manifest = Manifest::load(&material_path).context("Loading manifest")?;
         println!("Loaded manifest {:#?}", manifest);
 
+        let render_cache = RenderCache::load(&root)?;
+
         let theme = config.theme().context("Loading theme from config")?;
         let mut gen = Self {
             root,
@@ -42,6 +98,7 @@ impl Generator {
             theme,
             svgs: Default::default(),
             build_nonce: chrono::Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string(),
+            render_cache,
         };
         gen.svgs = gen
             .render_all_svgs(&material_path)
@@ -127,6 +184,10 @@ impl Generator {
             .context("Rendering index.html")?;
 
         self.theme.render_css(&self.root).context("Rendering css")?;
+
+        self.render_cache
+            .save(&self.root)
+            .context("Saving render cache")?;
 
         Ok(())
     }
@@ -234,30 +295,17 @@ impl Generator {
         Ok(folder_link)
     }
 
-    fn render_all_svgs(&self, material_root: &Path) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
+    fn render_all_svgs(&mut self, material_root: &Path) -> Result<BTreeMap<Uuid, Vec<PathBuf>>> {
         let zip_dir = material_root.join("zip");
 
         let mut doc_svgs: BTreeMap<Uuid, Vec<PathBuf>> = Default::default();
 
-        doc_svgs.insert(
-            self.manifest.home.id,
-            self.render_notebook_zip(
-                self.manifest.home.id,
-                &zip_dir.join(format!("{}.zip", self.manifest.home.id)),
-                false,
-            )
-            .context("Rendering index svg")?,
-        );
-
-        doc_svgs.insert(
-            self.manifest.logo.id,
-            self.render_notebook_zip(
-                self.manifest.logo.id,
-                &zip_dir.join(format!("{}.zip", self.manifest.logo.id)),
-                true,
-            )
-            .context("Rendering logo svg")?,
-        );
+        doc_svgs.extend(vec![
+            self.render_doc_meta(&self.manifest.home, &zip_dir, false)
+                .context("Rendering index svg")?,
+            self.render_doc_meta(&self.manifest.logo, &zip_dir, true)
+                .context("Rendering logo svg")?,
+        ]);
 
         doc_svgs.extend(
             self.manifest
@@ -265,21 +313,61 @@ impl Generator {
                 .docs()
                 .par_iter()
                 .map(|doc| {
-                    Ok((
-                        doc.id,
-                        self.render_notebook_zip(
-                            doc.id,
-                            &zip_dir.join(format!("{}.zip", doc.id)),
-                            false,
-                        )
-                        .context("Rendering document svg")?,
-                    ))
+                    self.render_doc_meta(doc, &zip_dir, false)
+                        .context("Rendering document svg")
                 })
                 .collect::<Result<Vec<_>>>()
-                .context("Rendering at least one document")?,
+                .context("Rendering documents")?,
+        );
+
+        self.render_cache.cache.extend(
+            self.manifest
+                .docs()
+                .iter()
+                .map(|doc| (doc.id, doc.modified_client)),
         );
 
         Ok(doc_svgs)
+    }
+
+    fn render_doc_meta(
+        &self,
+        doc: &crate::manifest::DocumentMeta,
+        zip_dir: &Path,
+        crop: bool,
+    ) -> Result<(Uuid, Vec<PathBuf>)> {
+        if let Some(last_modified) = self.render_cache.get(&doc.id) {
+            if last_modified == &doc.modified_client {
+                let notebook_root = self.root.join("svg").join(format!("{}", doc.id));
+                let mut pages = Vec::new();
+                for entry in std::fs::read_dir(notebook_root)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    let path = self.prefix.join(
+                        path.strip_prefix(&self.root)
+                            .context("Stripping site root form svg paths")?
+                            .to_path_buf(),
+                    );
+                    pages.push(path)
+                }
+                pages.sort_by_key(|page| {
+                    page.file_stem()
+                        .unwrap()
+                        .to_os_string()
+                        .into_string()
+                        .unwrap()
+                        .parse::<u16>()
+                        .unwrap()
+                });
+                return Ok((doc.id, pages));
+            }
+        }
+
+        let pages = self
+            .render_notebook_zip(doc.id, &zip_dir.join(format!("{}.zip", doc.id)), crop)
+            .context("Rendering notebook zip")?;
+
+        Ok((doc.id, pages))
     }
 
     fn render_notebook_zip(
