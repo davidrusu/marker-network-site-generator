@@ -199,7 +199,7 @@ impl Generator {
         name: &str,
         id: Uuid,
     ) -> Result<PathBuf> {
-        let sanitized_name = sanitize(name);
+        let sanitized_name = crate::sanitize(name);
         // TODO: replace this with a breadcrumbs_to_path method on the Site
         let doc_path = parent.join(format!("{}.html", sanitized_name));
 
@@ -233,7 +233,7 @@ impl Generator {
         folder: &str,
         posts: &Posts,
     ) -> Result<PathBuf> {
-        let sanitized_folder = sanitize(folder);
+        let sanitized_folder = crate::sanitize(folder);
         let folder_path = parent.join(&sanitized_folder);
         std::fs::create_dir_all(&folder_path)
             .context("Creating folder directory before generating html")?;
@@ -312,7 +312,7 @@ impl Generator {
                 .posts
                 .docs()
                 .par_iter()
-                .map(|doc| {
+                .map(|(_, doc)| {
                     self.render_doc_meta(doc, &zip_dir, false)
                         .context("Rendering document svg")
                 })
@@ -423,10 +423,4 @@ impl Generator {
 
         Ok(rendered_svgs)
     }
-}
-
-fn sanitize(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect()
 }

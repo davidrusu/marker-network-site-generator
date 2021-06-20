@@ -80,7 +80,7 @@ impl Manifest {
     pub fn docs(&self) -> Vec<&DocumentMeta> {
         std::iter::once(&self.home)
             .chain(std::iter::once(&self.logo))
-            .chain(self.posts.docs())
+            .chain(self.posts.docs().into_values())
             .collect()
     }
 
@@ -110,10 +110,16 @@ pub struct Posts {
 }
 
 impl Posts {
-    pub fn docs(&self) -> Vec<&DocumentMeta> {
+    pub fn docs(&self) -> BTreeMap<Vec<String>, &DocumentMeta> {
         self.documents
-            .values()
-            .chain(self.folders.values().flat_map(|f| f.docs()))
+            .iter()
+            .map(|(name, d)| (vec![name.clone()], d))
+            .chain(self.folders.iter().flat_map(|(name, f)| {
+                f.docs().into_iter().map(move |(mut path, d)| {
+                    path.insert(0, name.clone());
+                    (path, d)
+                })
+            }))
             .collect()
     }
 
