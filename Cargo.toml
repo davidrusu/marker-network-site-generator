@@ -2,13 +2,13 @@
 name = "marker_network_site_generator"
 version = "0.2.0"
 authors = ["David Rusu <davidrusu.me@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rayon = "1.5.0"
 handlebars = "3.5.4"
 tokio = { version = "1", features = ["full"] }
-lines-are-rusty = { git = "https://github.com/davidrusu/lines-are-rusty.git", branch = "changes-for-marker-network" }
+lines-are-rusty = { git = "https://github.com/ax3l/lines-are-rusty.git", branch = "develop" }
 remarkable-cloud-api = { git = "https://github.com/davidrusu/remarkable-rs", branch = "drusu/updates" }
 structopt = "0.3.21"
 serde_json = "1.0"

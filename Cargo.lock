@@ -579,7 +579,7 @@ checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
 [[package]]
 name = "lines-are-rusty"
 version = "0.2.0"
-source = "git+https://github.com/davidrusu/lines-are-rusty.git?branch=changes-for-marker-network#008e9835b6488e66e49fa56161d5c69693b28ede"
+source = "git+https://github.com/ax3l/lines-are-rusty.git?branch=develop#20cec5270843f9e8cffa61bdf52e7ceba59c16a4"
 dependencies = [
  "anyhow",
  "byteorder",
