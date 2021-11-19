@@ -288,7 +288,7 @@ impl Generator {
                     .map(|(name, link)| json!({"name": name, "link": link}))
                     .collect::<Vec<_>>(),
                 "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                "documents": docs.into_iter().filter(|(_, id, _)| self.has_content(id)).map(|(name, id, link)| json!({
+                "documents": docs.into_iter().filter(|(_, id, _)| self.has_content(*id)).map(|(name, id, link)| json!({
                     "name": name,
                     "svg": self.doc_first_page(id),
                     "link": link,
