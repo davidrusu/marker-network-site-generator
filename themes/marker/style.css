@@ -7,16 +7,14 @@ html {
 
 body {
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   margin: 0px;
 }
 
 .header {
-  position: fixed;
   display: flex;
   align-items: flex-start;
-  margin-top: 24px;
-  margin-left: 24px;
+  width: 100%;
 }
 
 .logo {
@@ -28,32 +26,33 @@ body {
   text-shadow: -1px 1px 0 white, 1px 1px 0 white, 1px -1px 0 white;
 }
 
-.gallery-thumbnail {
-  width: 240px;
-}
-
 .container {
   display: flex;
-  height: 100vh;
-  width: 100vw;
+  max-height: 100vh;
+  width: 100%;
+  justify-content: left;
 }
 
 .navbar {
-  margin-left: 24px;
-  margin-top: 100px;
-  width: 25vw;
-  min-width: 100px;
-  max-width: 250px;
+  display: flex;
+  flex-direction: column;
+  padding-left: 24px;
+  padding-right: 24px;
+  padding-top: 24px;
+  max-width: 30%;
+  min-width: 20%;
   overflow-y: auto;
+  overlow-x: visible;
+  gap: 10px;
 }
 
 .nav.group {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
-.folder-link {
-  margin: 5px;
+.btn {
   white-space: nowrap;
   text-decoration: none;
   color: white;
@@ -62,18 +61,14 @@ body {
   padding: 1px 3px;
 }
 
-.folder-link:hover {
+.btn:hover {
   transform: translate(1px, 1px);
   box-shadow: 1.5px 1.5px 0px #999;
 }
 
-.folder-link:active {
+.btn:active {
   transform: translate(1.5px, 1.5px);
   box-shadow: 1px 1px 0px #999;
-}
-
-.document-link {
-  margin: 6px;
 }
 
 .document-link-name {
@@ -84,45 +79,75 @@ body {
     text-align: center;
 }
 
+.document-page-number {
+    text-overflow: ellipsis;
+    overflow: visible;
+    white-space: nowrap;
+    position: relative;
+    transform: translate(5px, -20px);
+    opacity: 30%;
+    height: 0px;
+}
+
 .thumbnail {
-  width: 80px;
+  width: 120px;
 }
 
 a {
-  text-decoration: underline;
+  text-decoration: none;
   color: black;
+}
+
+a:hover {
+  text-decoration: underline;
 }
 
 .nb-pages {
   display: flex;
   flex-direction: column;
-  padding-top: 80px;
-  height: calc(100vh - 80px);
-  flex-grow: 1;
+  /* height: calc(100vh - 80px); */
+  /* max-width: 50vw; */
+  flex-grow:1;
   overflow-y: auto;
+  gap: 10px;
+  padding: 10px;
 }
 
 .nb-page-svg {
-  width: 100%;
   max-height: 100%;
   align-self: flex-start;
+  box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
 }
 
 .nb-page-container {
-    height: calc(100vh - 80px - 10px);
+    /* height: calc(100vh - 80px - 10px); */
 }
 
 .nb-pages-nav-thumbnails {
-    padding-top: 80px;
-    width: 10vw;
-    min-width: 120px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    /* width: 10vw; */
+    /* min-width: 120px; */
+    /* overflow-y: auto; */
+    gap: 5px;
 }
 
-.nb-page-container-nav-thumbnails {
-    width: 100%;
+.svg-button {
+  border: 0.1px solid black;
+  box-shadow: 2.5px 2.5px 0px #999;
 }
 
+.svg-button:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 1.5px 1.5px 0px #999;
+}
+
+.svg-button:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 1px 1px 0px #999;
+}
 
 .nb-page-divider {
   margin: 10px auto;
@@ -134,8 +159,9 @@ a {
   padding-top: 80px;
   display: flex;
   justify-content: center;
-  flex-grow: 1;
   flex-wrap: wrap;
+  gap: 24px;
+  flex-grow:1;
 }
 
 .gallery-folders {
@@ -144,18 +170,46 @@ a {
   align-items: flex-start;
   flex-wrap: wrap;
 }
-
 .gallery-thumbnail {
-    height: 300px;
+  height: 300px;
 }
 
 .breadcrumbs {
     display: flex;
     background: rgba(255, 255, 255, 0.9);
+    flex-wrap: wrap;
+}
+
+.breadcrumb {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.nb-name {
+    font-weight: bold;
 }
 
 .breadcrumb-seperator {
   margin: 0px 4px;
+}
+
+.svg-img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.marker-network-cta {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;;
+    right: 10px;
+    top: 10px;
+    background: rgba(255, 255, 255, 0.5);
+}
+.marker-network-cta > img{
+    height: 64px;
 }
 
 @media screen and (max-width: 550px) {
@@ -165,16 +219,20 @@ a {
 
     .container {
 	flex-direction: column;
+	max-height: unset;
     }
 
     .navbar {
 	flex-direction: column;
 	align-items: center;
-	width: 100vw;
 	margin-left: unset;
 	min-width: unset;
 	max-width: unset;
 	overflow-y: unset;
+    }
+
+    .gallery {
+	max-width: unset;
     }
 
     .nav.group {

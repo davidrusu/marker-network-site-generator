@@ -9,25 +9,37 @@
   </head>
 
   <body>
-    <div class="header">
-      <img class="logo" src="{{logo}}?{{build_nonce}}" />
-      <div class="title-and-breadcrumbs">
-        <div class="site-title">{{title}}</div>
-        <div class="breadcrumbs">
-          <div class="breadcrumb-seperator">&#92;</div>
-          {{#each breadcrumbs}}
-          <a class="breadcrumb" href="{{link}}">{{name}}</a>
-          <div class="breadcrumb-seperator">&#92;</div>
-          {{/each}}
-          <div class="nb-name">{{name}}</div>
-        </div>
-      </div>
-    </div>
     <div class="container">
       <div class="navbar">
-        <div class="nav group">
-          <a class="folder-link" href="{{back_link}}">&lt;&lt;&lt;</a>
+	<div class="header">
+	  <img class="svg-img logo" src="{{logo}}?{{build_nonce}}" />
+	  <div class="title-and-breadcrumbs">
+            <div class="site-title">{{title}}</div>
+            <div class="breadcrumbs">
+              <div class="breadcrumb-seperator">&#92;</div>
+              {{#each breadcrumbs}}
+              <a class="breadcrumb" href="{{link}}">{{name}}</a>
+              <div class="breadcrumb-seperator">&#92;</div>
+              {{/each}}
+              <div class="nb-name">{{name}}</div>
+            </div>
+	  </div>
+	</div>
+	<div class="nav group">
+          <a class="btn" href="{{back_link}}">&lt;&lt;&lt;</a>
         </div>
+	{{#if render_nav_thumbnails}}
+	<div class="nav group">
+	  <div class="nb-pages-nav-thumbnails">
+            {{#each pages}}
+	    <a href="#{{this}}">
+	      <img class="svg-img svg-button thumbnail" src="{{this}}?{{../build_nonce}}"/>
+              <div class="document-page-number">p{{@index}}</div>
+	    </a>
+            {{/each}}
+	  </div>
+	</div>
+	{{/if}}
       </div>
 
       <div class="nb-pages">
@@ -35,23 +47,16 @@
         <div class="nb-page-container">
           <img
             id="{{this}}"
-            class="nb-page-svg"
+            class="svg-img nb-page-svg"
             src="{{this}}?{{../build_nonce}}"
           />
         </div>
         {{/each}}
       </div>
-      {{#if render_nav_thumbnails}}
-      <div class="nb-pages-nav-thumbnails">
-        {{#each pages}}<a href="#{{this}}"
-          ><img
-            class="nb-page-container-nav-thumbnails"
-            src="{{this}}?{{../build_nonce}}"
-        /></a>
-        <div class="nb-page-divider"></div>
-        {{/each}}
-      </div>
-      {{/if}}
     </div>
+    <a class="marker-network-cta" href="https://marker.network">
+      <div>Join Marker Network</div>
+      <img src="https://marker.network/static/logo.png"></img>
+    </a>
   </body>
 </html>

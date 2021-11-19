@@ -8,37 +8,41 @@
     />
   </head>
   <body>
-    <div class="header">
-      <img class="logo" src="{{logo}}?{{build_nonce}}" />
-      <div class="title-and-breadcrumbs">
-        <div class="site-title">{{title}}</div>
-        <div class="breadcrumbs">
-          <div class="breadcrumb-seperator">&#92;</div>
-          {{#each breadcrumbs}}
-          <a class="breadcrumb" href="{{link}}">{{name}}</a>
-          <div class="breadcrumb-seperator">&#92;</div>
-          {{/each}}
-          <div class="nb-name">{{name}}</div>
-        </div>
-      </div>
-    </div>
     <div class="container">
       <div class="navbar">
+	<div class="header">
+	  <img class="svg-img logo" src="{{logo}}?{{build_nonce}}" />
+	  <div class="title-and-breadcrumbs">
+            <div class="site-title">{{title}}</div>
+            <div class="breadcrumbs">
+              <div class="breadcrumb-seperator">&#92;</div>
+              {{#each breadcrumbs}}
+              <a class="breadcrumb" href="{{link}}">{{name}}</a>
+              <div class="breadcrumb-seperator">&#92;</div>
+              {{/each}}
+              <div class="nb-name">{{name}}</div>
+            </div>
+	  </div>
+	</div>
         <div class="nav group">
-          <a class="folder-link" href="{{back_link}}">&lt&lt&lt</a>
+          <a class="btn" href="{{back_link}}">&lt&lt&lt</a>
           {{#each folders}}
-          <a class="folder-link" href="{{link}}">{{name}}</a>
+          <a class="btn" href="{{link}}">{{name}}</a>
           {{/each}}
         </div>
       </div>
       <div class="gallery">
         {{#each documents}}
         <a class="document-link" href="{{link}}">
+          <img class="svg-img svg-button gallery-thumbnail" src="{{svg}}?{{../build_nonce}}" />
           <div class="document-link-name">{{name}}</div>
-          <img class="gallery-thumbnail" src="{{svg}}?{{../build_nonce}}" />
         </a>
         {{/each}}
       </div>
     </div>
+    <a class="marker-network-cta" href="https://marker.network">
+      <div>Join Marker Network</div>
+      <img src="https://marker.network/static/logo.png"></img>
+    </a>
   </body>
 </html>

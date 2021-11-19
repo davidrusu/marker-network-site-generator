@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
@@ -81,13 +82,18 @@ impl Generator {
         material_path: PathBuf,
         root: PathBuf,
         prefix: PathBuf,
+        no_cache: bool,
     ) -> Result<Self> {
         std::fs::create_dir_all(&root).context("creating the generated site directory")?;
 
         let manifest = Manifest::load(&material_path).context("Loading manifest")?;
         println!("Loaded manifest {:#?}", manifest);
 
-        let render_cache = RenderCache::load(&root)?;
+        let render_cache = if no_cache {
+            RenderCache::default()
+        } else {
+            RenderCache::load(&root)?
+        };
 
         let theme = config.theme().context("Loading theme from config")?;
         let mut gen = Self {
@@ -383,6 +389,27 @@ impl Generator {
         let zip_file = std::fs::File::open(zip_path).context("Opening zip file")?;
         let mut zip = zip::ZipArchive::new(zip_file).context("Reading ZipArchive")?;
         let mut rendered_svgs = Vec::new();
+
+        println!("Reading page templates..");
+
+        let templates: Option<Vec<String>> = {
+            let mut templates: Option<Vec<String>> = None;
+            for i in 0..zip.len() {
+                let mut file = zip
+                    .by_index(i)
+                    .context("Attempting to index into the zip files")?;
+                if file.name().ends_with(".pagedata") {
+                    let mut buf = String::new();
+                    file.read_to_string(&mut buf)?;
+                    templates = Some(Vec::from_iter(buf.lines().map(str::to_string)));
+                    break;
+                }
+            }
+            templates
+        };
+
+        println!("Templates {:?}", templates);
+
         for i in 0..zip.len() {
             let mut file = zip
                 .by_index(i)
@@ -391,22 +418,30 @@ impl Generator {
                 let lines =
                     lines_are_rusty::LinesData::parse(&mut file).context("Parsing .rm file")?;
                 // file name has pattern <uuid>/<page-num>.rm, we just want the page-num.
-                let page_number = file
+                let page_number: usize = file
                     .name()
                     .trim_start_matches(&format!("{}/", id))
-                    .trim_end_matches(".rm");
+                    .trim_end_matches(".rm")
+                    .parse()?;
                 println!("Rendering {} p{} svg", id, page_number);
 
                 let output_path = notebook_root.join(format!("{}.svg", page_number));
                 let mut output =
                     std::fs::File::create(&output_path).context("Creating output file for svg")?;
+                let template = templates
+                    .as_ref()
+                    .and_then(|ts| ts.get(page_number))
+                    .map(String::as_str);
                 let debug = false;
+
+                println!("Template: {:?}", template);
                 lines_are_rusty::render_svg(
                     &mut output,
                     &lines.pages[0],
                     auto_crop,
                     &Default::default(),
                     2.0,
+                    template,
                     debug,
                 )
                 .context("Rendering document page svg")?;
