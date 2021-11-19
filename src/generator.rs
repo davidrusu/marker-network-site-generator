@@ -113,6 +113,10 @@ impl Generator {
         Ok(gen)
     }
 
+    fn has_content(&self, id: Uuid) -> bool {
+        !self.doc_pages(id).is_empty()
+    }
+
     fn title(&self) -> &str {
         &self.config.title
     }
@@ -284,7 +288,7 @@ impl Generator {
                     .map(|(name, link)| json!({"name": name, "link": link}))
                     .collect::<Vec<_>>(),
                 "back_link": breadcrumbs.iter().last().map(|(_, link)| link).unwrap(),
-                "documents": docs.into_iter().map(|(name, id, link)| json!({
+                "documents": docs.into_iter().filter(|d| self.has_content(d)).map(|(name, id, link)| json!({
                     "name": name,
                     "svg": self.doc_first_page(id),
                     "link": link,
