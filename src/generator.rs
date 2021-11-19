@@ -431,10 +431,18 @@ impl Generator {
                 let template = templates
                     .as_ref()
                     .and_then(|ts| ts.get(page_number))
+                    .and_then(|ts| {
+                        if lines_are_rusty::render::templates::TEMPLATES.contains_key(&ts) {
+                            Some(ts)
+                        } else {
+                            None
+                        }
+                    })
                     .map(String::as_str);
                 let debug = false;
 
                 println!("Template: {:?}", template);
+
                 lines_are_rusty::render_svg(
                     &mut output,
                     &lines.pages[0],
