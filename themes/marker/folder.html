@@ -34,14 +34,13 @@
       <div class="gallery">
         {{#each documents}}
         <a class="document-link" href="{{link}}">
-          <img class="svg-img svg-button gallery-thumbnail" src="{{svg}}?{{../build_nonce}}" />
+          <img class="svg-button gallery-thumbnail svg-img" src="{{svg}}?{{../build_nonce}}" />
           <div class="document-link-name">{{name}}</div>
         </a>
         {{/each}}
       </div>
     </div>
     <a class="marker-network-cta" href="https://marker.network">
-      <div>Join Marker Network</div>
       <img src="https://marker.network/static/logo.png"></img>
     </a>
   </body>

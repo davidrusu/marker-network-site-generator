@@ -33,7 +33,7 @@
 	  <div class="nb-pages-nav-thumbnails">
             {{#each pages}}
 	    <a href="#{{this}}">
-	      <img class="svg-img svg-button thumbnail" src="{{this}}?{{../build_nonce}}"/>
+	      <img class="svg-button thumbnail svg-img" src="{{this}}?{{../build_nonce}}"/>
               <div class="document-page-number">p{{@index}}</div>
 	    </a>
             {{/each}}
@@ -47,7 +47,7 @@
         <div class="nb-page-container">
           <img
             id="{{this}}"
-            class="svg-img nb-page-svg"
+            class="nb-page-svg svg-img"
             src="{{this}}?{{../build_nonce}}"
           />
         </div>
@@ -55,7 +55,6 @@
       </div>
     </div>
     <a class="marker-network-cta" href="https://marker.network">
-      <div>Join Marker Network</div>
       <img src="https://marker.network/static/logo.png"></img>
     </a>
   </body>

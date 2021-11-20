@@ -17,6 +17,11 @@ body {
   width: 100%;
 }
 
+.svg-img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
 .logo {
   height: 80px;
 }
@@ -50,6 +55,11 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.nav.group.thumbnails {
+    display:flex;
+    justify-content: center;
 }
 
 .btn {
@@ -90,7 +100,10 @@ body {
 }
 
 .thumbnail {
-  width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 120px;
 }
 
 a {
@@ -114,7 +127,7 @@ a:hover {
 }
 
 .nb-page-svg {
-  max-height: 100%;
+  max-width: 60vw;
   align-self: flex-start;
   box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
 }
@@ -156,7 +169,7 @@ a:hover {
 }
 
 .gallery {
-  padding-top: 80px;
+  padding: 24px;
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
@@ -194,25 +207,20 @@ a:hover {
   margin: 0px 4px;
 }
 
-.svg-img {
-    max-width: 100%;
-    max-height: 100%;
-}
-
 .marker-network-cta {
     position: fixed;
     display: flex;
     flex-direction: column;
     align-items: flex-end;;
-    right: 10px;
-    top: 10px;
+    right: 24px;
+    bottom: 24px;
     background: rgba(255, 255, 255, 0.5);
 }
 .marker-network-cta > img{
     height: 64px;
 }
 
-@media screen and (max-width: 550px) {
+@media screen and (max-width: 600px) {
     .nb-pages-nav-thumbnails {
 	display: none;
     }
@@ -239,11 +247,23 @@ a:hover {
 	justify-content: center;
     }
 
-    .thumbnail {
-	width: 50px;
+    .nav.group.thumbnails {
+	max-width: 100vw;
+	overflow-x: auto;
+	flex-wrap: nowrap;
+	justify-content: flex-start;
+    }
+
+    .thumbnail > img {
+	max-width: unset;
+	width: 80px;
     }
 
     .nb-pages {
 	padding-top: 0px;
+    }
+
+    .nb-page-svg {
+	max-width: 100%;
     }
 }
